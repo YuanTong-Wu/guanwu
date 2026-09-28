@@ -14,8 +14,10 @@ const RAW_SIZES = typeof __WQ_RAW_SIZES__ === 'object' ? __WQ_RAW_SIZES__ : {}
 const SHA256 = typeof __WQ_SHA256__ === 'object' ? __WQ_SHA256__ : {}
 
 // 下载一个文件，报告进度（0–1）和线上字节数。keep 为假时只下载不留内容（为让浏览器缓存它）。
+// total：解压后的字节数（浏览器交给我们的总是解压后的内容；跨域时连是否压缩都看不到，只能按构建时记下的算），
+// 也可以是函数：看了第一块数据再定。
 // firstByte / stall：多久没有响应、中途多久没有新数据就放弃（毫秒，0 为不限）
-async function fetchWithProgress(url, onProgress, keep, { firstByte = 0, stall = 0 } = {}) {
+async function fetchWithProgress(url, onProgress, keep, { total = 0, firstByte = 0, stall = 0 } = {}) {
   const ctrl = new AbortController()
   let timer = 0
   const arm = (ms) => {
@@ -26,27 +28,24 @@ async function fetchWithProgress(url, onProgress, keep, { firstByte = 0, stall =
     arm(firstByte)
     const res = await fetch(url, { signal: ctrl.signal })
     if (!res.ok) throw new Error(`${url.split('/').pop()} ${res.status}`)
-    // 压缩传输时读到的是解压后的字节，Content-Length 却是压缩后的大小（或者没有），只能按原始大小算
-    const encoded = !!res.headers.get('content-encoding')
-    const length = Number(res.headers.get('content-length')) || 0
-    const raw = RAW_SIZES[url.split('/').pop()] || 0
-    const total = encoded ? raw : length || raw
-    const wire = encoded ? length || raw * 0.35 : length || raw
-    const chunks = []
-    let got = 0
+    const wire = Number(res.headers.get('content-length')) || 0
     if (!res.body || !total) {
       arm(stall && stall * 4)
       const buf = new Uint8Array(await res.arrayBuffer())
       return keep ? buf : null
     }
+    const chunks = []
+    let got = 0
+    let size = typeof total === 'number' ? total : 0
     const reader = res.body.getReader()
     for (;;) {
       arm(stall)
       const { done, value } = await reader.read()
       if (done) break
       if (keep) chunks.push(value)
+      if (!size) size = total(value)
       got += value.length
-      onProgress(Math.min(0.99, got / total), wire)
+      onProgress(Math.min(0.99, got / size), wire)
     }
     if (!keep) return null
     const out = new Uint8Array(got)
@@ -87,8 +86,10 @@ function modelJob() {
   return job('model', RAW_SIZES['efficientdet_lite0.tflite.gz'] || RAW_SIZES['efficientdet_lite0.tflite'] || 1, async (report) => {
     if (typeof DecompressionStream === 'function') {
       try {
-        const gz = await fetchWithProgress(`${MODEL_URL}.gz`, report, true)
-        // 有的服务器会带着 Content-Encoding 发 .gz，浏览器已替我们解开了：看开头是 gzip 还是模型本身
+        // 一般拿到的是 .gz 原样；个别服务器带着 Content-Encoding 发，浏览器替我们解开了，那就按原大小算
+        const gzSize = RAW_SIZES['efficientdet_lite0.tflite.gz']
+        const rawSize = RAW_SIZES['efficientdet_lite0.tflite']
+        const gz = await fetchWithProgress(`${MODEL_URL}.gz`, report, true, { total: (first) => (isGzip(first) ? gzSize : rawSize) })
         const out = isGzip(gz) ? new Uint8Array(await new Response(new Blob([gz]).stream().pipeThrough(new DecompressionStream('gzip'))).arrayBuffer()) : gz
         if (isTflite(out)) return out
       } catch {
@@ -97,7 +98,7 @@ function modelJob() {
       // 没有 .gz（开发服务器会拿首页冒充）或内容不对：下原文件
       report(0)
     }
-    return fetchWithProgress(MODEL_URL, report, true)
+    return fetchWithProgress(MODEL_URL, report, true, { total: RAW_SIZES['efficientdet_lite0.tflite'] })
   })
 }
 
@@ -121,20 +122,22 @@ function wasmJob(name) {
     const hash = SHA256[file]
     if (hash && globalThis.crypto?.subtle) {
       try {
-        const bytes = await fetchWithProgress(`${MIRROR}/${file}`, report, true, { firstByte: 6000, stall: 8000 })
+        const bytes = await fetchWithProgress(`${MIRROR}/${file}`, report, true, { total: RAW_SIZES[file], firstByte: 6000, stall: 8000 })
         if ((await sha256(bytes)) === hash) return { local: false, url: URL.createObjectURL(new Blob([bytes], { type: 'application/wasm' })) }
       } catch {
         // 镜像不通或太慢：用自己的
       }
       report(0)
     }
-    await fetchWithProgress(`${WASM_BASE}/${file}`, report, false)
+    await fetchWithProgress(`${WASM_BASE}/${file}`, report, false, { total: RAW_SIZES[file] })
     return { local: true, url: `${WASM_BASE}/${file}` }
   })
 }
 
 // 首页空闲时调用：先把模型和 wasm 下到本地，不创建识别器（不占 CPU）
+let loaded = false
 export async function prefetchDetector() {
+  if (loaded) return
   try {
     modelJob()
     const vision = await import('@mediapipe/tasks-vision')
@@ -160,9 +163,11 @@ export async function loadDetector(onProgress) {
   const vision = await import('@mediapipe/tasks-vision')
   const name = await wasmName(vision)
   const wasm = wasmJob(name)
+  // 镜像不通改下自己的、.gz 不行改下原文件时，单项进度会回到 0：显示的数只增不减
+  let shown = 0
   const report = () => {
-    const sum = model.wire + wasm.wire
-    onProgress?.(Math.min(0.99, (model.progress * model.wire + wasm.progress * wasm.wire) / sum))
+    const p = Math.min(0.99, (model.progress * model.wire + wasm.progress * wasm.wire) / (model.wire + wasm.wire))
+    if (p > shown) onProgress?.((shown = p))
   }
   model.listeners.add(report)
   wasm.listeners.add(report)
@@ -186,14 +191,19 @@ export async function loadDetector(onProgress) {
     const fileset = binary && !binary.local ? { wasmLoaderPath: `${WASM_BASE}/${name}.js`, wasmBinaryPath: binary.url } : await FilesetResolver.forVisionTasks(WASM_BASE)
     det = await ObjectDetector.createFromOptions(fileset, options)
   } catch (e) {
-    if (!binary || binary.local) throw e
-    // blob: 地址在个别内置浏览器里用不了：退回自己站点上的
+    // 只有 blob: 地址取不到（个别内置浏览器）才退回自己站点上的；别的错（内存、显卡）换一份同样的文件也没用
+    if (!binary || binary.local || !/fetching of the wasm failed/.test(String(e?.message))) throw e
     det = await ObjectDetector.createFromOptions(await FilesetResolver.forVisionTasks(WASM_BASE), options)
   } finally {
-    if (binary && !binary.local) URL.revokeObjectURL(binary.url)
+    if (binary && !binary.local) {
+      URL.revokeObjectURL(binary.url)
+      // 地址已作废，下次重试要重新下
+      jobs.delete(`wasm:${name}`)
+    }
   }
   // 模型已拷进识别器，下载的东西不用再留
   jobs.clear()
+  loaded = true
   onProgress?.(1)
   let mode = 'VIDEO'
   let lastTs = 0

@@ -176,7 +176,7 @@ function boot() {
   // 首页上先在后台把模型和 wasm 下好（不占 CPU），点"起卦"时少等一会儿；省流量模式下不预先下
   if (!navigator.connection?.saveData) {
     const idle = window.requestIdleCallback || ((f) => setTimeout(f, 1500))
-    fontsReady.then(() => idle(() => state === 'home' && prefetchDetector(), { timeout: 3000 }))
+    fontsReady.then(() => idle(() => state === 'home' && !detectorPromise && prefetchDetector(), { timeout: 3000 }))
   }
 
   function ensureDetector() {
