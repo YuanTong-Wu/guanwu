@@ -14,13 +14,14 @@
   <body>
     <canvas id="stage" aria-hidden="true"></canvas>
     <video id="camera" playsinline muted autoplay></video>
-    <input id="photo-input" type="file" accept="image/*" capture="environment" hidden />
+    <input id="photo-input" type="file" accept="image/*" hidden />
 
     <main id="ui">
       <section id="home" class="screen active" aria-labelledby="home-title">
         <h1 id="home-title" class="title">万物起卦</h1>
         <p class="subtitle">心有一事　见物而占</p>
         <button id="start" class="start-button" type="button" aria-label="开始起卦"><i aria-hidden="true"></i><span>起 卦</span></button>
+        <button id="home-photo" class="link-button quiet" type="button">以照片起卦</button>
         <p id="inapp-tip" class="inapp-tip" hidden>此处或开不了相机。请点右上角"…"，选"在浏览器打开"</p>
         <p class="footnote">画面只在本机处理，不上传　·　典籍文化体验，仅供娱乐</p>
       </section>
@@ -37,7 +38,7 @@
           <button id="lock" class="line-button" type="button" aria-label="就数这些，起卦"><i aria-hidden="true"></i>就此起卦</button>
         </div>
         <div class="scan-fallbacks">
-          <button id="use-photo" class="link-button" type="button">改以拍照</button>
+          <button id="use-photo" class="link-button" type="button">以照片起卦</button>
           <button id="use-time" class="link-button" type="button">以时起卦</button>
         </div>
       </section>

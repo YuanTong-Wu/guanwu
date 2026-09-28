@@ -55,7 +55,25 @@ try {
   await new Promise((r) => setTimeout(r, 300))
   await page.screenshot({ path: `${out}/5-reading-end.png` })
 
-  console.log(JSON.stringify({ count, title, saveVisible, errors }, null, 1))
+  // 第二条路：首页"以照片起卦"，选一张横拍的照片
+  let photoTitle = null
+  const photoFile = resolve(process.env.PHOTO || '.test-assets/tassen.jpg')
+  const page2 = await browser.newPage()
+  await page2.setViewport({ width: 390, height: 844, deviceScaleFactor: 2, isMobile: true, hasTouch: true })
+  page2.on('pageerror', (e) => errors.push(`photo pageerror: ${e.message}`))
+  await page2.goto(URL, { waitUntil: 'networkidle0' })
+  await new Promise((r) => setTimeout(r, 800))
+  const [chooser] = await Promise.all([page2.waitForFileChooser({ timeout: 10000 }), page2.click('#home-photo')])
+  await chooser.accept([photoFile])
+  await page2.waitForSelector('#ended.active', { timeout: 90000 })
+  await new Promise((r) => setTimeout(r, 1500))
+  await page2.screenshot({ path: `${out}/6-photo-ended.png` })
+  await page2.click('#show-reading')
+  await new Promise((r) => setTimeout(r, 500))
+  photoTitle = await page2.$eval('#reading-title', (e) => e.textContent)
+  const photoSubject = await page2.$eval('.reading .full-name', (e) => e.textContent)
+
+  console.log(JSON.stringify({ count, title, saveVisible, photoTitle, photoSubject, errors }, null, 1))
 } finally {
   await browser.close()
 }

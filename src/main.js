@@ -167,7 +167,7 @@ function boot() {
         camera = await openCamera(video)
         photo.setSource(video, { mirror: camera.mirror })
       } catch {
-        toast('相机未能重开，可"改以拍照"或"以时起卦"', 4000)
+        toast('相机未能重开，可"以照片起卦"或"以时起卦"', 4000)
       }
     }
   })
@@ -191,8 +191,8 @@ function boot() {
   let cameraFailed = false
   function switchToPhotoMode(message) {
     cameraFailed = true
-    $('start').querySelector('span').textContent = '拍 照'
-    $('start').setAttribute('aria-label', '拍一张照片来起卦')
+    $('start').querySelector('span').textContent = '以照片起卦'
+    $('start').setAttribute('aria-label', '选一张照片或拍一张来起卦')
     state = 'home'
     show('home')
     setRing(0.3)
@@ -212,19 +212,19 @@ function boot() {
     state = 'loading'
     show('loading')
     $('loading-text').textContent = '备识物之法'
-    // 识物之法太久没好（网络慢）：先进入取景，留"以时起卦"和"改以拍照"
+    // 识物之法太久没好（网络慢）：先进入取景，留"以时起卦"和"以照片起卦"
     const detectorReady = within(ensureDetector().catch(() => null), 25000)
     try {
       camera = await openCamera(video)
     } catch (e) {
       camera = null
-      switchToPhotoMode(e.code === 'NotAllowedError' ? '未得相机之许。再点"拍照"，拍一张亦可起卦' : '此处开不了相机。再点"拍照"，拍一张亦可起卦')
+      switchToPhotoMode(e.code === 'NotAllowedError' ? '未得相机之许。可以照片起卦' : '此处开不了相机。可以照片起卦')
       return
     }
     photo.setSource(video, { mirror: camera.mirror })
     photo.precompile(stage.renderer)
     await detectorReady
-    if (!detector) toast('识物之法未能载入。可"改以拍照"或"以时起卦"', 5000)
+    if (!detector) toast('识物之法未能载入。可"以照片起卦"或"以时起卦"', 5000)
     enterScan()
   })
 
@@ -252,7 +252,7 @@ function boot() {
     setTimeout(() => {
       if (state !== 'scan') return
       if (!video.videoWidth || video.currentTime === t0) {
-        toast('相机无画面，请点下方"改以拍照"', 4000)
+        toast('相机无画面，请点下方"以照片起卦"', 4000)
         $('use-photo').classList.add('pulse')
       }
     }, 4000)
@@ -296,7 +296,7 @@ function boot() {
     const took = performance.now() - t0
     onDetections(found, performance.now())
     if (detectFailures > 5) {
-      setHint('此处识物不成。可"改以拍照"或"以时起卦"')
+      setHint('此处识物不成。可"以照片起卦"或"以时起卦"')
       return
     }
     scheduleDetect(Math.max(180, took * 2))
@@ -369,6 +369,13 @@ function boot() {
     clearTimeout(detectTimer)
     $('photo-input').click()
   })
+  // 首页直接以照片起卦：相册里选一张或现拍一张
+  $('home-photo').addEventListener('click', () => {
+    unlockAudio()
+    if (state !== 'home') return
+    state = 'picking'
+    $('photo-input').click()
+  })
   // 选照片时点了取消：回到原来的地方
   $('photo-input').addEventListener('cancel', () => {
     if (state === 'picking') backFromPicking()
@@ -392,8 +399,10 @@ function boot() {
       toast('此图读不出，换一张再试')
       return backFromPicking()
     }
+    $('loading-text').textContent = '备识物之法'
     await within(ensureDetector().catch(() => null), 25000)
-    photo.setSource(still, { mirror: false })
+    // 照片完整显示，照片里的东西全都算数
+    photo.setSource(still, { mirror: false, fit: 'contain' })
     let found = []
     try {
       found = detector ? visibleOnly(await detector.detectImage(still)) : []
@@ -403,9 +412,9 @@ function boot() {
     const pick = pickCountable(found)
     if (!pick) {
       toast('图中未见可数之物，以时起卦')
-      return beginTime(still, false)
+      return beginTime(still, false, 'contain')
     }
-    return begin(still, pick, { mirror: false })
+    return begin(still, pick, { mirror: false, fit: 'contain' })
   })
 
   // —— 以时起卦 ——
@@ -415,12 +424,12 @@ function boot() {
     beginTime(video.videoWidth ? grabFrame(video) : null, !!camera?.mirror)
   })
 
-  async function beginTime(still, mirror) {
+  async function beginTime(still, mirror, fit = 'cover') {
     const token = claim()
     const now = new Date()
     const cast = castByTime(await lunarNow(now), now)
     if (token !== castToken) return
-    photo.setSource(still || blankCanvas(), { mirror: still ? mirror : false })
+    photo.setSource(still || blankCanvas(), { mirror: still ? mirror : false, fit })
     return runRitual(token, [], cast, '', '以时起卦', `time:${cast.original.num}:${cast.hour.num}`)
   }
 
@@ -443,10 +452,10 @@ function boot() {
   }
 
   // —— 起卦 ——
-  function begin(still, pick, { mirror }) {
+  function begin(still, pick, { mirror, fit = 'cover' }) {
     const token = claim()
     const cast = castByCount(pick.count, new Date())
-    photo.setSource(still, { mirror })
+    photo.setSource(still, { mirror, fit })
     const boxes = pick.items.map((d) => toScreenBox(d.box))
     return runRitual(token, boxes, cast, pick.label.short, inscription(pick.label, pick.count), `${pick.label.short}:${pick.count}:${cast.hour.num}`)
   }
@@ -558,7 +567,7 @@ function boot() {
     } catch {
       camera = null
       photo.object.visible = false
-      switchToPhotoMode('此处开不了相机。再点"拍照"，拍一张亦可起卦')
+      switchToPhotoMode('此处开不了相机。可以照片起卦')
     }
   })
 

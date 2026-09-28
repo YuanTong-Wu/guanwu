@@ -257,6 +257,13 @@ body {
   margin-top: 14px;
 }
 
+.link-button.quiet {
+  background: none;
+  border-color: transparent;
+  color: var(--paper-dim);
+  font-size: 13px;
+}
+
 .link-button.pulse {
   color: var(--gold);
   animation: breathe-text 1.2s ease-in-out infinite;
@@ -479,7 +486,14 @@ body {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .link-button.pulse {
+  .link-button.quiet {
+  background: none;
+  border-color: transparent;
+  color: var(--paper-dim);
+  font-size: 13px;
+}
+
+.link-button.pulse {
     animation: none;
   }
 }

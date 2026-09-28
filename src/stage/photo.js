@@ -96,6 +96,9 @@ const bakeFrag = /* glsl */ `
     float far = clamp(dist * 2.2, 0.0, 1.0) + (fbm(auv * 3.0 + 11.0) - 0.5) * 0.35;
     // 晕开时边缘的参差
     float jag = fbm(auv * 3.0 + 3.0);
+    // 照片按"完整显示"放时，画面外的空白处不着墨
+    vec2 t = texUv(uv);
+    ink *= step(0.0, t.x) * step(t.x, 1.0) * step(0.0, t.y) * step(t.y, 1.0);
     gl_FragColor = vec4(clamp(ink, 0.0, 1.0), m, (far + 0.25) / 1.5, jag);
   }
 `
@@ -120,7 +123,9 @@ const frag = /* glsl */ `
 
   void main() {
     vec2 uv = vUv;
-    vec3 photo = texture2D(uMap, texUv(uv)).rgb;
+    vec2 t = texUv(uv);
+    float inside = step(0.0, t.x) * step(t.x, 1.0) * step(0.0, t.y) * step(t.y, 1.0);
+    vec3 photo = texture2D(uMap, t).rgb * inside;
     // 预先画好的：R 墨色，G 物体遮罩，B 远近，A 参差
     vec4 baked = texture2D(uInkTex, uv);
     float far = baked.b * 1.5 - 0.25;
@@ -179,7 +184,9 @@ export class PhotoLayer {
   }
 
   // source：<video> 或 <canvas>/<img>
-  setSource(source, { mirror = false } = {}) {
+  // fit：'cover' 铺满（相机取景）；'contain' 完整显示（用户选的照片，照片里的东西全都算数）
+  setSource(source, { mirror = false, fit = 'cover' } = {}) {
+    this.fitMode = fit
     const old = this.uniforms.uMap.value
     let tex
     if (source instanceof HTMLVideoElement) {
@@ -277,13 +284,23 @@ export class PhotoLayer {
     this.place(1, 0, 0)
   }
 
-  // 像 CSS 的 object-fit: cover
+  // 像 CSS 的 object-fit：cover 铺满裁切，contain 完整显示留边
   fit() {
     if (!this.view) return
     const va = this.view.w / this.view.h
     const sa = this.sourceSize.w / this.sourceSize.h
     const s = this.uniforms.uUvScale.value
     const o = this.uniforms.uUvOffset.value
+    if (this.fitMode === 'contain') {
+      if (sa > va) {
+        s.set(1, sa / va)
+        o.set(0, -(sa / va - 1) / 2)
+      } else {
+        s.set(va / sa, 1)
+        o.set(-(va / sa - 1) / 2, 0)
+      }
+      return
+    }
     if (sa > va) {
       s.set(va / sa, 1)
       o.set((1 - va / sa) / 2, 0)

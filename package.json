@@ -13,9 +13,11 @@
     "check": "vite build && node scripts/check-dist.mjs",
     "data": "node scripts/build-zhouyi.mjs",
     "collate": "node scripts/collate.mjs",
-    "fonts": "node scripts/font-chars.mjs && python3 scripts/build-fonts.py"
+    "fonts": "node scripts/font-chars.mjs && python3 scripts/build-fonts.py",
+    "phone": "vite build && WQ_HTTPS=1 vite preview --port 4443 --strictPort"
   },
   "devDependencies": {
+    "@vitejs/plugin-basic-ssl": "^2.3.0",
     "puppeteer-core": "^25.12.0",
     "vite": "^8.3.1"
   },
