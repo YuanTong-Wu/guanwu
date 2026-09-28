@@ -46,7 +46,7 @@ function testAssets() {
 const RAW_SIZES = Object.fromEntries(
   ['models/efficientdet_lite0.tflite', 'mediapipe/vision_wasm_internal.wasm', 'mediapipe/vision_wasm_nosimd_internal.wasm'].map((p) => [
     p.split('/').pop(),
-    statSync(`public/${p}`).size,
+    statSync(new URL(`./public/${p}`, import.meta.url)).size,
   ]),
 )
 

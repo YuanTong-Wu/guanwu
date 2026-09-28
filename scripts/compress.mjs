@@ -2,9 +2,10 @@
 // 首次打开从约 18 MB 降到约 6 MB。压缩后省不到 5% 的文件（字体、图片）不留压缩版。
 import { readdirSync, readFileSync, statSync, writeFileSync, unlinkSync } from 'node:fs'
 import { join } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { brotliCompressSync, gzipSync, constants } from 'node:zlib'
 
-const dist = new URL('../dist', import.meta.url).pathname
+const dist = fileURLToPath(new URL('../dist', import.meta.url))
 const EXT = /\.(html|js|mjs|css|json|svg|wasm|tflite|txt|xml)$/
 const files = []
 const walk = (d) => readdirSync(d).forEach((f) => (statSync(join(d, f)).isDirectory() ? walk(join(d, f)) : files.push(join(d, f))))

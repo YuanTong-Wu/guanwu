@@ -13,13 +13,19 @@ guanwu.example {
 		-Server
 	}
 
-	# 带哈希的构建产物永不变；模型、wasm、字体文件名固定，缓存一天；页面本身每次都问一下
+	# 带哈希的构建产物永不变，缓存一年；其余文件名固定（页面、模型、wasm、字体），
+	# 每次都带 ETag 问一下，没变就是 304，不重新下载。
+	# defer：只加在真正发出去的文件上，404 不带缓存头
 	@hashed path /assets/*
-	header @hashed Cache-Control "public, max-age=31536000, immutable"
-	@fixed path /models/* /mediapipe/* /fonts/*
-	header @fixed Cache-Control "public, max-age=86400"
-	@page path / /index.html
-	header @page Cache-Control "no-cache"
+	header @hashed {
+		Cache-Control "public, max-age=31536000, immutable"
+		defer
+	}
+	@fixed not path /assets/*
+	header @fixed {
+		Cache-Control "no-cache"
+		defer
+	}
 
 	# 预先压好的 .br/.gz 直接发（scripts/compress.mjs 生成）
 	file_server {

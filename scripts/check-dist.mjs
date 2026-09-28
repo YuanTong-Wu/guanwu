@@ -1,8 +1,9 @@
 // 构建产物自检：不能引用国内不稳定的第三方域名；字体、模型、wasm 都要在产物里。
 import { readdirSync, readFileSync, statSync, existsSync } from 'node:fs'
 import { join } from 'node:path'
+import { fileURLToPath } from 'node:url'
 
-const dist = new URL('../dist', import.meta.url).pathname
+const dist = fileURLToPath(new URL('../dist', import.meta.url))
 const BLOCKED = /(googleapis\.com|gstatic\.com|jsdelivr\.net|unpkg\.com|cdnjs\.cloudflare\.com|esm\.sh)/
 const files = []
 const walk = (d) => readdirSync(d).forEach((f) => (statSync(join(d, f)).isDirectory() ? walk(join(d, f)) : files.push(join(d, f))))
