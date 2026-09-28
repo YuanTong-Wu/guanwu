@@ -6,8 +6,8 @@
     <meta name="theme-color" content="#050505" />
     <!-- 只许连自己的站点：即使以后有人升级了带遥测的库，画面和数据也出不去 -->
     <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'wasm-unsafe-eval' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; connect-src 'self' blob: data:; font-src 'self'; worker-src 'self' blob:" />
-    <meta name="description" content="心里想一件事，对着眼前的东西扫一下。按《梅花易数》物数占起卦。画面只在你的手机里处理。" />
-    <title>万物起卦</title>
+    <meta name="description" content="观物：心有一事，对着眼前的东西一扫，按《梅花易数》物数占起卦。画面只在你的手机里处理。" />
+    <title>观物 · 见物起卦</title>
     <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='12' fill='%23050505'/%3E%3Cg fill='%23ece5d4'%3E%3Crect x='14' y='14' width='36' height='5'/%3E%3Crect x='14' y='24' width='15' height='5'/%3E%3Crect x='35' y='24' width='15' height='5'/%3E%3Crect x='14' y='34' width='36' height='5'/%3E%3C/g%3E%3Crect x='14' y='44' width='36' height='5' fill='%23b8321f'/%3E%3C/svg%3E" />
     <link rel="stylesheet" href="/src/style.css" />
   </head>
@@ -18,8 +18,8 @@
 
     <main id="ui">
       <section id="home" class="screen active" aria-labelledby="home-title">
-        <h1 id="home-title" class="title">万物起卦</h1>
-        <p class="subtitle">心有一事　见物而占</p>
+        <h1 id="home-title" class="title">观物</h1>
+        <p class="subtitle">心有一事　见物起卦</p>
         <button id="start" class="start-button" type="button" aria-label="开始起卦"><i aria-hidden="true"></i><span>起 卦</span></button>
         <button id="home-photo" class="link-button quiet" type="button">以照片起卦</button>
         <p id="inapp-tip" class="inapp-tip" hidden>此处或开不了相机。请点右上角"…"，选"在浏览器打开"</p>

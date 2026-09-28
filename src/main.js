@@ -37,7 +37,7 @@ function toast(text, ms = 2600) {
 // 最多等若干毫秒：个别环境（后台标签页等）会一直挂起，不能因此卡住
 const within = (p, ms) => Promise.race([p, new Promise((r) => setTimeout(r, ms))])
 const fontsReady = within(
-  Promise.all([document.fonts?.load?.('64px "WQ Brush"', '万物起卦乾坤'), document.fonts?.load?.('32px "WQ Serif"', '卦之')]).catch(() => {}),
+  Promise.all([document.fonts?.load?.('64px "WQ Brush"', '观物起卦乾坤'), document.fonts?.load?.('32px "WQ Serif"', '卦之')]).catch(() => {}),
   3000,
 )
 
@@ -534,7 +534,7 @@ function boot() {
     sharing = true
     try {
       const c = lastCast.cast
-      const r = await shareOrSave(videoBlob, `万物起卦-${c.original.name}之${c.changed.name}`)
+      const r = await shareOrSave(videoBlob, `观物-${c.original.name}之${c.changed.name}`)
       if (r === 'shared') toast('已存')
       else if (r === 'downloaded') toast('若未见下载，可截屏留存')
     } finally {

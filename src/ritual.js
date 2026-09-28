@@ -160,9 +160,11 @@ export function playRitual({ stage, photo, paper, boxes, cast, label, inscriptio
   ins2.reveal = 0
 
   // —— 印章：题款下方，册页右侧 ——
+  // 竖长的两字印，高度与原方印相同，宽度约六成
   const sealSize = Math.min(L.leaf.w * 0.15, 56)
-  const seal = add(Sprite.seal('万物起卦', sealSize, CINNABAR, { order: 32 }))
-  const sealPos = S(insRight - sealSize / 2 + insH * 0.4, insTop + ins1.baseHeight + sealSize * 0.9)
+  const seal = add(Sprite.seal('观物', sealSize, CINNABAR, { order: 32 }))
+  const sealW = seal.width
+  const sealPos = S(insRight - sealW / 2 + insH * 0.4, insTop + ins1.baseHeight + sealSize * 0.9)
   seal.object.position.set(sealPos.x, sealPos.y, 0)
   seal.opacity = 0
   const flakes = add(new GoldFlakes({ rect: { x: leafC.x - L.leaf.w / 2, y: leafC.y + L.leaf.h / 2, w: L.leaf.w, h: L.leaf.h }, count: 10, seed: cast.original.num }))

@@ -1,7 +1,7 @@
 // 平面贴片：书法字、朱笔圈、印章。
 // 字是"写"出来的：沿书写方向显影（横排从左到右，竖排从上到下，圈沿圆周），边缘参差像笔锋。
 import * as THREE from 'three'
-import { glyph, seal, release } from './textures.js'
+import { glyph, seal, sealAspect, release } from './textures.js'
 
 const vert = /* glsl */ `
   varying vec2 vUv;
@@ -75,7 +75,7 @@ export class Sprite {
   }
 
   static seal(text, height, color = 0xb8321f, opts = {}) {
-    return new Sprite(seal(text, opts), 1, height, color, opts)
+    return new Sprite(seal(text, opts), sealAspect(text), height, color, opts)
   }
 
   static image(texture, height, color, opts = {}) {

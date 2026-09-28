@@ -1,8 +1,8 @@
 {
-  "name": "wanwu-qigua",
+  "name": "guanwu",
   "version": "0.1.0",
   "private": true,
-  "description": "万物起卦：对着眼前的东西一扫，按《梅花易数》物数占起卦。",
+  "description": "观物：心有一事，见物起卦。对着眼前的东西一扫，按《梅花易数》物数占起卦。",
   "type": "module",
   "license": "MIT",
   "scripts": {

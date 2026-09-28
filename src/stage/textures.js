@@ -174,28 +174,34 @@ function makeGlyph(text, { size = 512, font = FONTS.brush, weight = 400, pad = 0
 }
 
 // 朱砂方印：边缘残破，阳文白字留空（朱底白字）
+// 朱文方印或竖长印：两个字排成竖长方印，四个字排成方印（右起竖读）
+export function sealAspect(text) {
+  return [...text].length <= 2 ? 0.6 : 1
+}
+
 export function seal(text, opts = {}) {
   const { size = 512, seed = 3, font = FONTS.brush } = opts
   return cached(`seal:${text}:${size}:${seed}`, () => makeSeal(text, { size, seed, font }))
 }
 
 function makeSeal(text, { size, seed, font }) {
+  const H = size
+  const W = Math.round(size * sealAspect(text))
   const c = document.createElement('canvas')
-  c.width = c.height = size
+  c.width = W
+  c.height = H
   const g = c.getContext('2d')
   const r = rng(seed)
-  const m = size * 0.08
+  const m = H * 0.07
+  // 印面：边缘略有起伏
   g.fillStyle = '#fff'
   g.beginPath()
-  const pts = 44
-  for (let i = 0; i < pts; i++) {
-    const side = Math.floor(i / (pts / 4))
-    const t = (i % (pts / 4)) / (pts / 4)
-    const j = (r() - 0.5) * size * 0.025
-    const x = [m + t * (size - 2 * m), size - m + j, size - m - t * (size - 2 * m), m + j][side]
-    const y = [m + j, m + t * (size - 2 * m), size - m + j, size - m - t * (size - 2 * m)][side]
-    i === 0 ? g.moveTo(x, y) : g.lineTo(x, y)
-  }
+  const n = 11
+  const edge = (t, len) => (r() - 0.5) * H * 0.02
+  for (let i = 0; i < n; i++) g.lineTo(m + (i / n) * (W - 2 * m), m + edge())
+  for (let i = 0; i < n; i++) g.lineTo(W - m + edge(), m + (i / n) * (H - 2 * m))
+  for (let i = 0; i < n; i++) g.lineTo(W - m - (i / n) * (W - 2 * m), H - m + edge())
+  for (let i = 0; i < n; i++) g.lineTo(m + edge(), H - m - (i / n) * (H - 2 * m))
   g.closePath()
   g.fill()
   // 挖出文字（白文印）
@@ -203,25 +209,33 @@ function makeSeal(text, { size, seed, font }) {
   const chars = [...text]
   const cols = chars.length > 2 ? 2 : 1
   const rows = Math.ceil(chars.length / cols)
-  const cell = (size - 2 * m) / Math.max(cols, rows)
-  g.font = `${cell * 0.86}px ${font}`
+  const cell = Math.min((W - 2 * m) / cols, (H - 2 * m) / rows)
+  g.font = `${cell * 0.84}px ${font}`
   g.textAlign = 'center'
   g.textBaseline = 'middle'
   // 印文从右往左、从上往下
   chars.forEach((ch, i) => {
     const col = cols - 1 - Math.floor(i / rows)
     const row = i % rows
-    const x = m + cell * (col + 0.5) + ((size - 2 * m) - cell * cols) / 2
-    const y = m + cell * (row + 0.5) + ((size - 2 * m) - cell * rows) / 2
+    const x = W / 2 + (col - (cols - 1) / 2) * cell
+    const y = H / 2 + (row - (rows - 1) / 2) * cell
     g.fillText(ch, x, y)
   })
   // 残破：随机啃掉边缘和内部的小块
-  for (let i = 0; i < 90; i++) {
-    const edge = r() < 0.7
-    const x = edge ? (r() < 0.5 ? m + r() * 8 : size - m - r() * 8) : m + r() * (size - 2 * m)
-    const y = edge ? m + r() * (size - 2 * m) : m + r() * (size - 2 * m)
+  for (let i = 0; i < 80; i++) {
+    const onEdge = r() < 0.7
+    let x
+    let y
+    if (onEdge) {
+      const side = Math.floor(r() * 4)
+      x = side === 0 ? m + r() * 6 : side === 1 ? W - m - r() * 6 : m + r() * (W - 2 * m)
+      y = side === 2 ? m + r() * 6 : side === 3 ? H - m - r() * 6 : m + r() * (H - 2 * m)
+    } else {
+      x = m + r() * (W - 2 * m)
+      y = m + r() * (H - 2 * m)
+    }
     g.beginPath()
-    g.arc(r() < 0.5 ? x : y, r() < 0.5 ? y : x, 1 + r() * (edge ? 6 : 2.5), 0, Math.PI * 2)
+    g.arc(x, y, 1 + r() * (onEdge ? 5 : 2.2), 0, Math.PI * 2)
     g.fill()
   }
   g.globalCompositeOperation = 'source-over'

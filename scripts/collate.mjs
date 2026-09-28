@@ -19,7 +19,7 @@ const root = new URL('..', import.meta.url)
 const CACHE = new URL('data/sources/wikisource-cache.json', root)
 const DECISIONS = new URL('data/collation.json', root)
 const API = 'https://zh.wikisource.org/w/api.php'
-const UA = 'wanwu-qigua-collate/0.1 (open-source; contact via repo)'
+const UA = 'guanwu-collate/0.1 (open-source; contact via github.com/YuanTong-Wu/guanwu)'
 const BATCH = 40
 
 const args = new Set(process.argv.slice(2))
