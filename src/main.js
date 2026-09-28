@@ -7,7 +7,7 @@ import { openCamera, grabFrame, loadPhoto } from './camera.js'
 import { loadDetector } from './detect/detector.js'
 import { pickCountable, inscription } from './core/labels.js'
 import { castByCount, castByTime } from './core/meihua.js'
-import { lunarNow, ganzhiLine } from './core/lunar.js'
+import { lunarNow, ganzhiLine, lunarDateLine } from './core/lunar.js'
 import { renderReading } from './reading.js'
 import { unlockAudio, audioStream, woodTick, chime } from './audio.js'
 import { startRecording, shareOrSave } from './recorder.js'
@@ -187,7 +187,7 @@ function scanTick(now) {
   if (!pick) {
     $('scan-count').textContent = ''
     stable = { key: '', since: now }
-    if (now - noneSince > 6000) $('scan-hint').textContent = '未见可数之物。杯、书、花草、人、车皆可'
+    if (now - noneSince > 6000) $('scan-hint').textContent = '未见可数之物。杯、瓶、书、盆栽、人、车皆可'
     return
   }
   noneSince = now
@@ -276,7 +276,7 @@ async function beginTime(still) {
   // 没有物体时，以画面中心一块作为"化墨"的源头
   if (still) photo.setSource(still, { mirror: camera?.mirror })
   else photo.setSource(blankCanvas(), { mirror: false })
-  return runRitual([], cast, '', '目中无物')
+  return runRitual([], cast, '', '以时起卦')
 }
 
 function blankCanvas() {
@@ -300,7 +300,9 @@ function begin(still, pick, { mirror }) {
 
 async function runRitual(boxes, cast, label, text) {
   state = 'ritual'
-  const [, ganzhi] = await Promise.all([fontsReady, within(ganzhiLine(new Date(), cast.hour.label), 1500)])
+  // 以时起卦时写出实际用的农历日子，与算法对得上；物数占写干支纪时
+  const dateLine = cast.method === 'time' ? Promise.resolve(lunarDateLine(cast.lunar, cast.hour.label)) : within(ganzhiLine(new Date(), cast.hour.label), 1500)
+  const [, ganzhi] = await Promise.all([fontsReady, dateLine])
   homeRing.opacity = 0
   overlay.clear()
   show(null)

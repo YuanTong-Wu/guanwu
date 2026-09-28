@@ -26,7 +26,7 @@ const brush = union(
   chars(labelsSrc),
   chars(BRANCHES.join('') + '时'),
   chars('零一二三四五六七八九十百千'),
-  chars('万物起卦之就这些此刻'),
+  chars('万物起卦之就这些此刻以时'),
 )
 
 const sources = [

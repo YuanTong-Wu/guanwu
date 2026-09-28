@@ -1,5 +1,6 @@
 // 运行时用 Canvas2D 画出所有纹理：笔触、宣纸、朱印、书法字。整个项目不需要一张图片。
 import * as THREE from 'three'
+import BRUSH_MISSING from '../data/brush-missing.json'
 
 export const FONTS = {
   brush: '"WQ Brush", "WQ Serif", "Kaiti SC", "STKaiti", "KaiTi", serif',
@@ -112,7 +113,13 @@ export function ricePaper({ size = 1024, seed = 7 } = {}) {
 
 // 文字贴图，白色，交给材质着色。支持字距（spacing，按字号的比例）和竖排（text 里用 \n 分行，每行一个字）。
 // 返回纹理、宽高比和行数。
+// 书法字体缺字（如"夬""姤"）时整串改用正文字体，免得一行里混两种字体
+export function brushSafe(text, font = FONTS.brush) {
+  return font === FONTS.brush && [...String(text)].some((ch) => BRUSH_MISSING.includes(ch)) ? FONTS.serif : font
+}
+
 export function glyph(text, { size = 512, font = FONTS.brush, weight = 400, pad = 0.12, spacing = 0 } = {}) {
+  font = brushSafe(text, font)
   const lines = String(text).split('\n')
   const c = document.createElement('canvas')
   const g = c.getContext('2d')

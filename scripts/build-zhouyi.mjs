@@ -57,6 +57,7 @@ for (const p of patches) {
       set: (v) => (h.lines[i] = splitLabel(v)),
     }
   } else if (p.field === 'extra') target = { get: () => `${h.extra.label}：${h.extra.text}`, set: (v) => (h.extra = splitLabel(v)) }
+  else if (p.field === 'daxiang') target = { get: () => h.daxiang, set: (v) => (h.daxiang = v) }
   else throw new Error(`patch: bad field ${p.field}`)
   const cur = target.get()
   if (cur === p.to) continue

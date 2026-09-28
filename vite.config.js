@@ -8,14 +8,16 @@ function snapshots() {
     apply: 'serve',
     configureServer(server) {
       server.middlewares.use('/__snap', (req, res) => {
-        const name = new URL(req.url, 'http://x').searchParams.get('name') || 'frame'
+        const q = new URL(req.url, 'http://x').searchParams
+        const name = q.get('name') || 'frame'
+        const ext = q.get('ext') || 'jpg'
         const chunks = []
         req.on('data', (c) => chunks.push(c))
         req.on('end', () => {
           const body = Buffer.concat(chunks).toString()
-          const b64 = body.replace(/^data:image\/\w+;base64,/, '')
+          const b64 = body.replace(/^data:[^;]+;base64,/, '')
           mkdirSync('.snaps', { recursive: true })
-          writeFileSync(`.snaps/${name.replace(/[^\w.-]/g, '_')}.jpg`, Buffer.from(b64, 'base64'))
+          writeFileSync(`.snaps/${name.replace(/[^\w.-]/g, '_')}.${ext.replace(/\W/g, '')}`, Buffer.from(b64, 'base64'))
           res.end('ok')
         })
       })

@@ -50,7 +50,7 @@ const LABELS = {
   bowl: ['碗', '只', '碗'],
   banana: ['香蕉', '根', '蕉'],
   apple: ['苹果', '个', '苹果'],
-  sandwich: ['三明治', '个', '三明治'],
+  sandwich: ['三明治', '个', '饼'],
   orange: ['橙子', '个', '橘'],
   broccoli: ['西兰花', '颗', '菜'],
   carrot: ['胡萝卜', '根', '萝卜'],
@@ -103,12 +103,13 @@ export function labelOf(category) {
   return hit ? { name: hit[0], measure: hit[1], short: hit[2] } : { name: '物', measure: '件', short: '物' }
 }
 
-// 把检测结果按类别归组，取数量最多的一类来数（同数时取总面积大的一类）。
+// 把检测结果按题款简称归组（车、卡车、公交都算"车"），取数量最多的一组来数，同数时取总面积大的一组。
 export function pickCountable(detections) {
   const groups = new Map()
   for (const d of detections) {
-    const key = String(d.category).toLowerCase()
-    const g = groups.get(key) || { category: key, items: [], area: 0 }
+    const label = labelOf(d.category)
+    const key = label.short
+    const g = groups.get(key) || { category: String(d.category).toLowerCase(), label, items: [], area: 0 }
     g.items.push(d)
     g.area += (d.box?.width || 0) * (d.box?.height || 0)
     groups.set(key, g)
@@ -116,7 +117,7 @@ export function pickCountable(detections) {
   const ranked = [...groups.values()].sort((a, b) => b.items.length - a.items.length || b.area - a.area)
   if (!ranked.length) return null
   const top = ranked[0]
-  return { ...top, count: top.items.length, label: labelOf(top.category), others: ranked.slice(1) }
+  return { ...top, count: top.items.length, others: ranked.slice(1) }
 }
 
 // 题款："见杯三"、"见萝卜一"

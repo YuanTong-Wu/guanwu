@@ -3,6 +3,7 @@ import ZHOUYI from './data/zhouyi.json'
 import PLAIN from './data/plain.json'
 import { formulaCaptions } from './captions.js'
 import { tiYongRelation } from './core/meihua.js'
+import BRUSH_MISSING from './data/brush-missing.json'
 
 const byNum = (list) => new Map(list.map((x) => [x.num, x]))
 const TEXT = byNum(ZHOUYI)
@@ -34,6 +35,7 @@ export function renderReading(cast, subject, label) {
   const root = el('article', 'reading')
   const h = el('h2', null, `${o.name}之${c.name}`)
   h.id = 'reading-title'
+  if ([...h.textContent].some((ch) => BRUSH_MISSING.includes(ch))) h.classList.add('serif-title')
   root.append(h)
   root.append(el('p', 'full-name', `${o.fullName} → ${c.fullName}　·　${subject}　·　${cast.hour.label}`))
 
@@ -49,7 +51,7 @@ export function renderReading(cast, subject, label) {
     cast.method === 'count' && cast.rule !== 'count+hour'
       ? '下卦依《梅花易数·物数占》原文"以时数配作下卦"。'
       : cast.method === 'time'
-        ? '眼前没数到东西时，改用《梅花易数》年月日时起卦。'
+        ? '未以物数，依《梅花易数》年月日时起卦。'
         : ''
   how.append(el('p', null, `起卦之法：${caps.upper}；${caps.lower}；${caps.moving}。`))
   how.append(

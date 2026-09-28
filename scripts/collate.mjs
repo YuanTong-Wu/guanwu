@@ -43,7 +43,8 @@ const WS_TITLE = {
 // 繁体→简体，逐字列出（每对"繁简"两字）。只收经文用到的字；乾、撝、繻、纆、藉、豶、餗等
 // 本书保留原字形的字不收。
 const T2S = new Map(
-  `並并 亂乱 來来 係系 傾倾 僕仆 儀仪 億亿 兌兑 內内 則则 剝剥 動动 勝胜 勞劳 厲厉
+  `財财 輔辅 強强 勢势 綸纶 樂乐 謀谋 衆众 萬万 親亲 諸诸 風风 澤泽 儉俭 難难 榮荣 祿禄 類类 順顺 稱称 奮奋 嚮向 窮穷 設设 電电 罰罚 閉闭 關关 對对 識识 語语 懼惧 悶闷 兩两 繼继 嚴严 禮礼 蒞莅 異异 懲惩 誥诰 積积 勸劝 歷历 賢贤 麗丽 講讲 數数 議议 緩缓
+   並并 亂乱 來来 係系 傾倾 僕仆 儀仪 億亿 兌兑 內内 則则 剝剥 動动 勝胜 勞劳 厲厉
    叢丛 問问 啞哑 喪丧 國国 園园 執执 堅坚 壯壮 婦妇 宮宫 實实 寧宁 寵宠 屨屦 帥帅
    師师 帶带 幹干 幾几 廟庙 廬庐 張张 彙汇 後后 從从 復复 恆恒 惡恶 惻恻 慍愠 慶庆
    憂忧 懷怀 戔戋 戰战 戶户 揚扬 損损 擊击 據据 攣挛 敗败 敵敌 時时 晉晋 晝昼 東东
@@ -160,6 +161,15 @@ function parseInline(s, notes) {
 }
 
 const render = (parts) => parts.map((p) => (typeof p === 'string' ? p : p.a)).join('')
+
+// 《象传》大象：'''象曰：''' 之后的第一行 **
+function parseDaxiang(name, wikitext, notes) {
+  const lines = wikitext.split('\n')
+  const at = lines.findIndex((l) => l.includes("'''象曰"))
+  if (at < 0) return null
+  const next = lines.slice(at + 1).find((l) => l.trim().startsWith('**'))
+  return next ? parseInline(next.trim().slice(2), notes) : null
+}
 const variantsOf = (parts) => parts.filter((p) => typeof p !== 'string')
 
 // 取"易經"一节：** 卦辞，*** 卦辞续行，*# 爻辞
@@ -269,6 +279,7 @@ function segmentsOf(h) {
   const segs = [{ segment: '卦辞', text: h.judgment }]
   for (const l of h.lines) segs.push({ segment: l.label, text: l.text })
   if (h.extra) segs.push({ segment: h.extra.label, text: h.extra.text })
+  if (h.daxiang) segs.push({ segment: '大象', text: h.daxiang })
   return segs
 }
 
@@ -293,6 +304,8 @@ for (const h of zhouyi) {
   const jing = parseJing(h.name, page.wikitext)
   notes.push(...jing.notes.map((x) => `${h.name}: ${x}`))
   const wsSegs = [{ segment: '卦辞', parts: jing.judgment }, ...jing.yao.map((y) => ({ segment: y.label, parts: y.parts }))]
+  const dx = parseDaxiang(h.name, page.wikitext, jing.notes)
+  if (dx) wsSegs.push({ segment: '大象', parts: dx })
   const ours = segmentsOf(h)
   if (wsSegs.length !== ours.length || wsSegs.some((w, i) => w.segment !== ours[i].segment))
     notes.push(`${h.name}: segment labels differ — ours ${ours.map((s) => s.segment).join(' ')}; wikisource ${wsSegs.map((s) => s.segment).join(' ')}`)

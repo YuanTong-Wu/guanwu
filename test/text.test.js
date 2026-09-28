@@ -36,3 +36,12 @@ test('pickCountable takes the most numerous category, ties broken by area', () =
   assert.equal(t.category, 'book')
   assert.equal(pickCountable([]), null)
 })
+
+test('short names never contain numerals, and merged classes count together', async () => {
+  const { labelOf: lo, pickCountable: pc } = await import('../src/core/labels.js')
+  for (const c of ['person', 'car', 'truck', 'sandwich', 'bench', 'toilet', 'bottle', 'vase', 'cup']) assert.doesNotMatch(lo(c).short, /[一二三四五六七八九十百千]/)
+  const box = { width: 1, height: 1 }
+  const r = pc([{ category: 'car', box }, { category: 'truck', box }, { category: 'car', box }, { category: 'cup', box }])
+  assert.equal(r.label.short, '车')
+  assert.equal(r.count, 3)
+})

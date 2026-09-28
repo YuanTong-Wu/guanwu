@@ -109,6 +109,23 @@ body {
   color: var(--paper-dim);
 }
 
+.inapp-tip {
+  margin: 0;
+  position: absolute;
+  top: calc(16px + var(--safe-top));
+  left: 16px;
+  right: 16px;
+  padding: 10px 14px;
+  border-radius: 8px;
+  border: 1px solid rgba(184, 50, 31, 0.7);
+  background: rgba(10, 10, 10, 0.85);
+  color: var(--paper);
+  font-size: 13px;
+  line-height: 1.7;
+  letter-spacing: 0.08em;
+  text-align: center;
+}
+
 .footnote {
   margin: 0;
   position: absolute;
@@ -367,6 +384,11 @@ body {
   font-size: 44px;
   margin: 0 0 4px;
   color: #1f1710;
+}
+
+.reading h2.serif-title {
+  font-family: var(--serif);
+  letter-spacing: 0.05em;
 }
 
 .reading .full-name {

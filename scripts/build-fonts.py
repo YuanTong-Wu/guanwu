@@ -86,6 +86,12 @@ def build(font):
 
 if __name__ == "__main__":
     missing = {f["out"]: build(f) for f in FONTS}
+    # 书法字体缺的字写进数据，界面遇到含缺字的卦名就整串改用正文字体，不混排两种字体
+    import json
+    out = os.path.join(ROOT, "src", "data", "brush-missing.json")
+    with open(out, "w", encoding="utf-8") as fh:
+        json.dump("".join(sorted(set(missing["brush.woff2"]))), fh, ensure_ascii=False)
+    print("brush-missing:", "".join(missing["brush.woff2"]) or "none")
     # 正文字体必须覆盖所有字；书法字体缺的字由正文字体兜底
     if missing["serif.woff2"]:
         sys.exit("serif font is missing glyphs: " + "".join(missing["serif.woff2"]))

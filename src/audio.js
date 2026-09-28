@@ -56,6 +56,51 @@ export function audioStream() {
 }
 
 const ready = () => ctx && ctx.state !== 'closed'
+// 离线渲染时（合成预览视频的声轨）由调用方指定"此刻"
+let offlineAt = null
+const now = () => (offlineAt != null ? offlineAt : ctx.currentTime)
+
+function buildChain(context) {
+  const comp = context.createDynamicsCompressor()
+  comp.threshold.value = -16
+  comp.ratio.value = 3
+  const m = context.createGain()
+  m.gain.value = 0.9
+  m.connect(comp)
+  comp.connect(context.destination)
+  return { comp, master: m }
+}
+
+// 把一串 [时刻, 声音名, 参数] 离线渲染成一段音频（仅开发时合成预览视频用）
+export async function renderCues(cues, duration) {
+  const rate = 44100
+  const off = new OfflineAudioContext(2, Math.ceil(rate * duration), rate)
+  const saved = { ctx, master, reverb }
+  ctx = off
+  const chain = buildChain(off)
+  master = chain.master
+  reverb = off.createConvolver()
+  reverb.buffer = impulse()
+  const wet = off.createGain()
+  wet.gain.value = 0.38
+  reverb.connect(wet)
+  wet.connect(master)
+  const fns = { bell, chime, woodTick, inkDrop, brush, sealThud }
+  for (const [at, name, args] of cues) {
+    offlineAt = at
+    fns[name]?.(...args)
+  }
+  offlineAt = null
+  const buf = await off.startRendering()
+  ;({ ctx, master, reverb } = saved)
+  return buf
+}
+
+// 开发用：记录仪式里每个声音的时刻
+export const cueLog = { enabled: false, clock: () => 0, list: [] }
+function logCue(name, args) {
+  if (cueLog.enabled) cueLog.list.push([cueLog.clock(), name, args])
+}
 
 function out(node, dry = 1, wet = 0.6) {
   const d = ctx.createGain()
@@ -100,8 +145,9 @@ function partial(freq, amp, decay, t, wet = 0.7) {
 
 // 编钟：非谐波泛音，两两微差出拍音，长余韵
 export function bell(freq = 110, strength = 1, length = 6) {
+  logCue('bell', [freq, strength, length])
   if (!ready()) return
-  const t = ctx.currentTime
+  const t = now()
   for (const [ratio, amp, life] of [[0.5, 0.35, 1], [1, 1, 0.9], [1.19, 0.5, 0.7], [2, 0.35, 0.45], [2.74, 0.22, 0.3], [3.76, 0.12, 0.2]]) {
     partial(freq * ratio - 0.8, 0.09 * amp * strength, length * life, t)
     partial(freq * ratio + 0.8, 0.09 * amp * strength, length * life, t)
@@ -110,15 +156,17 @@ export function bell(freq = 110, strength = 1, length = 6) {
 
 // 石磬：清亮，一击即收
 export function chime(freq = 1046, strength = 1) {
+  logCue('chime', [freq, strength])
   if (!ready()) return
-  const t = ctx.currentTime
+  const t = now()
   for (const [ratio, amp, life] of [[1, 1, 1.6], [2.756, 0.35, 0.7], [5.404, 0.15, 0.35], [8.933, 0.06, 0.2]]) partial(freq * ratio, 0.11 * amp * strength, life, t, 0.8)
 }
 
 // 木鱼：数到一个东西，"笃"一声
 export function woodTick(strength = 1) {
+  logCue('woodTick', [strength])
   if (!ready()) return
-  const t = ctx.currentTime
+  const t = now()
   const o = ctx.createOscillator()
   o.frequency.setValueAtTime(640, t)
   o.frequency.exponentialRampToValueAtTime(470, t + 0.08)
@@ -132,8 +180,9 @@ export function woodTick(strength = 1) {
 
 // 一滴墨落在纸上："嗒"，带一点低沉的回响
 export function inkDrop() {
+  logCue('inkDrop', [])
   if (!ready()) return
-  const t = ctx.currentTime
+  const t = now()
   const o = ctx.createOscillator()
   o.frequency.setValueAtTime(1100, t)
   o.frequency.exponentialRampToValueAtTime(260, t + 0.05)
@@ -156,8 +205,9 @@ export function inkDrop() {
 
 // 毛笔擦过宣纸：带通噪声，起笔重、收笔轻
 export function brush(duration = 0.34, strength = 1) {
+  logCue('brush', [duration, strength])
   if (!ready()) return
-  const t = ctx.currentTime
+  const t = now()
   const n = noise(duration + 0.1)
   const f = ctx.createBiquadFilter()
   f.type = 'bandpass'
@@ -178,8 +228,9 @@ export function brush(duration = 0.34, strength = 1) {
 
 // 盖印："砰"——低沉的一击加一声木质的敲击，不拖尾
 export function sealThud() {
+  logCue('sealThud', [])
   if (!ready()) return
-  const t = ctx.currentTime
+  const t = now()
   const o = ctx.createOscillator()
   o.frequency.setValueAtTime(92, t)
   o.frequency.exponentialRampToValueAtTime(42, t + 0.25)
