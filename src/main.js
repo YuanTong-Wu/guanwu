@@ -483,7 +483,11 @@ function boot() {
     if (REDUCED) stage.kick = () => {}
     ritual = playRitual({ stage, photo, paper, boxes, cast, label, inscription: text, ganzhi })
     debug.ritual = ritual
-    await ritual.done
+    // 仪式开始即返回；结束后的事另外接着做
+    ritual.done.then(() => finishRitual(token))
+  }
+
+  async function finishRitual(token) {
     if (token !== castToken) return
     state = 'ended'
     show('ended')
