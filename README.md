@@ -87,6 +87,22 @@ cloudflared tunnel --url https://localhost:4443 --no-tls-verify
 
 `npm run build` 生成 `dist/`，是纯静态文件，放到任何静态托管都行。所有资源都是同源的，不依赖谷歌、jsDelivr 等在国内不稳定的域名。
 
+`node scripts/compress.mjs` 会给大文件预先压好 `.br`/`.gz`，首次打开约 6 MB（不压缩约 18 MB）。托管要能按 `Accept-Encoding` 发这些压缩版，`.wasm` 要用 `application/wasm`。
+
+自己有一台服务器（比如不用备案的香港服务器）时，可以用仓库里的脚本：
+
+1. 服务器装好 Ubuntu 或 Debian，域名解析到它的 IP，放行 80、443 端口。
+2. 在仓库根目录建 `.deploy.env`（不进仓库）：
+   ```
+   GUANWU_HOST=ubuntu@服务器IP
+   GUANWU_DOMAIN=你的域名
+   GUANWU_KEY=~/.ssh/你的登录密钥
+   ```
+3. `scripts/deploy.sh setup`：装 [Caddy](https://caddyserver.com)（自动申请 HTTPS 证书），写好配置（`deploy/Caddyfile`）。只做一次。
+4. `npm run deploy`：构建、压缩、上传。以后每次更新都只跑这一步。
+
+国内访问的注意事项：各家免费托管自带的网址（`*.pages.dev`、`*.vercel.app`、`*.edgeone.app` 等）在国内或微信里基本打不开，要用自己的域名。没备案的域名在微信里可能先出现"非微信官方网页"的确认页，点继续即可。
+
 ## 技术
 
 three.js 单画布渲染整场仪式：定格时用一个着色器把照片"画"成水墨存进贴图（大块浓淡墨加勾线和飞白），之后每帧只读这张贴图；毛笔爻画、朱笔圈、书法字、朱印、金箔都是运行时用 Canvas 画出来的纹理。首页是邵雍"先天六十四卦圆图"做的细线转盘，在平面与立体之间缓缓往复。声音全部用 Web Audio 现场合成（石磬、墨滴、笔擦纸、编钟、盖印、木鱼）。整个项目没有一张图片、一段音频文件。

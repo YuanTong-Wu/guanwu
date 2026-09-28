@@ -7,11 +7,16 @@ const MODEL_URL = `${BASE}models/efficientdet_lite0.tflite`
 const WASM_BASE = `${BASE}mediapipe`
 const SCORE = 0.3
 
+// 构建时记下的原始大小（见 vite.config.js）
+const RAW_SIZES = typeof __WQ_RAW_SIZES__ === 'object' ? __WQ_RAW_SIZES__ : {}
+
 // 下载模型并报告进度（0–1）
 async function fetchWithProgress(url, onProgress) {
   const res = await fetch(url)
   if (!res.ok) throw new Error(`model ${res.status}`)
-  const total = Number(res.headers.get('content-length')) || 0
+  // 压缩传输时读到的是解压后的字节，Content-Length 却是压缩后的大小，只能按原始大小算
+  const encoded = !!res.headers.get('content-encoding')
+  const total = encoded ? RAW_SIZES[url.split('/').pop()] || 0 : Number(res.headers.get('content-length')) || 0
   if (!res.body || !total) return new Uint8Array(await res.arrayBuffer())
   const reader = res.body.getReader()
   const chunks = []

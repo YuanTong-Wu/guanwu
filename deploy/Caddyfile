@@ -1,0 +1,32 @@
+# 观物的静态站点。setup-server.sh 会把 guanwu.example 换成真实域名，写到 /etc/caddy/Caddyfile。
+# Caddy 自动申请和续期 HTTPS 证书（Let's Encrypt）。
+
+guanwu.example {
+	root * /srv/guanwu
+
+	header {
+		X-Content-Type-Options nosniff
+		Referrer-Policy no-referrer
+		Permissions-Policy "camera=(self), microphone=(), geolocation=()"
+		Strict-Transport-Security "max-age=31536000"
+		Content-Security-Policy "frame-ancestors 'none'"
+		-Server
+	}
+
+	# 带哈希的构建产物永不变；模型、wasm、字体文件名固定，缓存一天；页面本身每次都问一下
+	@hashed path /assets/*
+	header @hashed Cache-Control "public, max-age=31536000, immutable"
+	@fixed path /models/* /mediapipe/* /fonts/*
+	header @fixed Cache-Control "public, max-age=86400"
+	@page path / /index.html
+	header @page Cache-Control "no-cache"
+
+	# 预先压好的 .br/.gz 直接发（scripts/compress.mjs 生成）
+	file_server {
+		precompressed br gzip
+	}
+}
+
+www.guanwu.example {
+	redir https://guanwu.example{uri} permanent
+}

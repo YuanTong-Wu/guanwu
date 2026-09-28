@@ -8,3 +8,4 @@ public/_test/
 .fake/
 .test-assets/
 .claude/
+.deploy.env

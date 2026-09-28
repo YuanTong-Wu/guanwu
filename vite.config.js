@@ -1,6 +1,6 @@
 import { defineConfig } from 'vite'
 import basicSsl from '@vitejs/plugin-basic-ssl'
-import { mkdirSync, writeFileSync, existsSync, readFileSync } from 'node:fs'
+import { mkdirSync, writeFileSync, existsSync, readFileSync, statSync } from 'node:fs'
 
 // 仅开发时用：演示模式 ?snaps=1.2,3.4 会把这些时刻的画面 POST 到 /__snap，存进 .snaps/，方便逐帧检查
 function snapshots() {
@@ -42,8 +42,17 @@ function testAssets() {
   }
 }
 
+// 大文件的原始字节数。服务器发 br/gzip 压缩版时 Content-Length 是压缩后的大小，下载进度要按原始大小算
+const RAW_SIZES = Object.fromEntries(
+  ['models/efficientdet_lite0.tflite', 'mediapipe/vision_wasm_internal.wasm', 'mediapipe/vision_wasm_nosimd_internal.wasm'].map((p) => [
+    p.split('/').pop(),
+    statSync(`public/${p}`).size,
+  ]),
+)
+
 export default defineConfig({
   base: './',
+  define: { __WQ_RAW_SIZES__: JSON.stringify(RAW_SIZES) },
   server: { host: true },
   // 手机上试玩：WQ_HTTPS=1 时用自签名证书开 HTTPS（手机浏览器只在 HTTPS 下给相机）
   plugins: [snapshots(), testAssets(), ...(process.env.WQ_HTTPS ? [basicSsl()] : [])],
