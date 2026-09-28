@@ -5,3 +5,4 @@ dist/
 fonts-src/
 public/_test/
 .snaps/
+.fake/

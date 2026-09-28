@@ -303,15 +303,12 @@ export function playRitual({ stage, photo, paper, boxes, cast, label, inscriptio
   if (dateLine) fadeIn(dateLine, tSeal + 0.8, 0.8, 0.6)
 
   const total = tSeal + 2.6
-  tl.start()
   let finished
   const done = new Promise((r) => (finished = r))
-  const driver = {
-    update: (dt) => {
-      tl.update(dt)
-      if (tl.time >= total) finished()
-    },
-  }
+  // 结尾静一静再收：时间轴要一直走到 total，所以在那里放一个结束事件
+  tl.call(total, () => finished())
+  tl.start()
+  const driver = { update: (dt) => tl.update(dt) }
   stage.add(driver)
 
   return {

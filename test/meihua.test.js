@@ -100,3 +100,15 @@ test('tiYong relations', () => {
   assert.equal(tiYongRelation(TRIGRAMS[1], TRIGRAMS[2]).key, 'same')
   assert.equal(arrange(2, 3, 5).original.name, '革')
 })
+
+test('timeline keeps running until its last event', async () => {
+  const { Timeline } = await import('../src/stage/timeline.js')
+  const tl = new Timeline()
+  let fired = false
+  tl.tween(0, 1, () => {})
+  tl.call(3, () => (fired = true))
+  tl.start()
+  for (let i = 0; i < 200; i++) tl.update(1 / 60)
+  assert.equal(fired, true)
+  assert.ok(tl.time >= 3)
+})

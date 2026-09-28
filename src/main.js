@@ -371,6 +371,21 @@ $('again').addEventListener('click', () => {
 })
 
 
+// 调试：?autostart 自动点"起卦"；?snaplive=0.5 每隔 0.5 秒把画面存到开发服务器（配合无头浏览器和假摄像头做端到端检查）
+const QS = new URLSearchParams(location.search)
+if (QS.has('autostart')) fontsReady.then(() => setTimeout(() => $('start').click(), 300))
+if (QS.has('snaplive')) {
+  const every = Number(QS.get('snaplive')) || 0.5
+  let n = 0
+  const snap = () => {
+    stage.frame(0)
+    const url = canvas.toDataURL('image/jpeg', 0.8)
+    const ui = [...document.querySelectorAll('.screen.active')].map((e) => e.id).join('+') || 'none'
+    fetch(`/__snap?name=live-${String(n++).padStart(3, '0')}-${state}-${ui}`, { method: 'POST', body: url })
+  }
+  setInterval(snap, every * 1000)
+}
+
 // 调试：?demo 用内置示意图直接跑一遍仪式（没有相机也能看效果）
 if (new URLSearchParams(location.search).has('demo')) {
   const detectPhoto = async (image) => (await ensureDetector()).detectImage(image)
