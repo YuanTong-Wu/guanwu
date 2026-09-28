@@ -85,10 +85,10 @@ export function ricePaper({ size = 1024, seed = 7 } = {}) {
   c.width = c.height = size
   const g = c.getContext('2d')
   const r = rng(seed)
-  g.fillStyle = '#e9dfc9'
+  g.fillStyle = '#eee9df'
   g.fillRect(0, 0, size, size)
   for (let i = 0; i < 2200; i++) {
-    g.strokeStyle = r() < 0.5 ? 'rgba(120,100,70,0.06)' : 'rgba(255,250,235,0.09)'
+    g.strokeStyle = r() < 0.5 ? 'rgba(120,100,70,0.022)' : 'rgba(255,252,242,0.06)'
     g.lineWidth = 0.5 + r()
     const x = r() * size
     const y = r() * size
@@ -99,10 +99,10 @@ export function ricePaper({ size = 1024, seed = 7 } = {}) {
     g.quadraticCurveTo(x + Math.cos(a + 0.5) * l * 0.5, y + Math.sin(a + 0.5) * l * 0.5, x + Math.cos(a) * l, y + Math.sin(a) * l)
     g.stroke()
   }
-  for (let i = 0; i < 300; i++) {
-    g.fillStyle = `rgba(110,90,60,${0.02 + r() * 0.05})`
+  for (let i = 0; i < 60; i++) {
+    g.fillStyle = `rgba(110,90,60,${0.01 + r() * 0.02})`
     g.beginPath()
-    g.arc(r() * size, r() * size, 1 + r() * 14, 0, Math.PI * 2)
+    g.arc(r() * size, r() * size, 1 + r() * 10, 0, Math.PI * 2)
     g.fill()
   }
   const t = toTexture(c)
@@ -110,22 +110,34 @@ export function ricePaper({ size = 1024, seed = 7 } = {}) {
   return t
 }
 
-// 书法大字，白色，交给材质着色。返回纹理和宽高比。
-export function glyph(text, { size = 512, font = FONTS.brush, weight = 400, pad = 0.12 } = {}) {
+// 文字贴图，白色，交给材质着色。支持字距（spacing，按字号的比例）和竖排（text 里用 \n 分行，每行一个字）。
+// 返回纹理、宽高比和行数。
+export function glyph(text, { size = 512, font = FONTS.brush, weight = 400, pad = 0.12, spacing = 0 } = {}) {
+  const lines = String(text).split('\n')
   const c = document.createElement('canvas')
   const g = c.getContext('2d')
-  g.font = `${weight} ${size}px ${font}`
-  const m = g.measureText(text)
-  const w = Math.ceil(m.width + size * pad * 2)
-  const h = Math.ceil(size * (1 + pad * 2))
+  const setFont = () => (g.font = `${weight} ${size}px ${font}`)
+  setFont()
+  const widthOf = (line) => [...line].reduce((w, ch) => w + g.measureText(ch).width, 0) + Math.max(0, [...line].length - 1) * spacing * size
+  const maxW = Math.max(...lines.map(widthOf))
+  const w = Math.ceil(maxW + size * pad * 2)
+  const lineH = size * (1 + (lines.length > 1 ? 0.08 : 0))
+  const h = Math.ceil(lineH * lines.length + size * pad * 2)
   c.width = w
   c.height = h
-  g.font = `${weight} ${size}px ${font}`
+  setFont()
   g.fillStyle = '#fff'
   g.textBaseline = 'middle'
-  g.textAlign = 'center'
-  g.fillText(text, w / 2, h / 2 + size * 0.04)
-  return { texture: toTexture(c), aspect: w / h }
+  g.textAlign = 'left'
+  lines.forEach((line, li) => {
+    let x = (w - widthOf(line)) / 2
+    const y = size * pad + lineH * (li + 0.5) + size * 0.04
+    for (const ch of line) {
+      g.fillText(ch, x, y)
+      x += g.measureText(ch).width + spacing * size
+    }
+  })
+  return { texture: toTexture(c), aspect: w / h, lines: lines.length }
 }
 
 // 朱砂方印：边缘残破，阳文白字留空（朱底白字）
@@ -199,16 +211,102 @@ export function brushCorner({ size = 256, seed = 5 } = {}) {
   const g = c.getContext('2d')
   const r = rng(seed)
   g.fillStyle = '#fff'
-  const w = size * 0.1
-  for (let i = 0; i < 60; i++) {
-    g.globalAlpha = 0.5 + r() * 0.5
+  const w = size * 0.05
+  for (let i = 0; i < 24; i++) {
+    g.globalAlpha = 0.55 + r() * 0.45
     const o = (r() - 0.5) * w
-    g.fillRect(w * 0.6, w * 0.6 + o * 0.3 + w / 2, size * (0.55 + r() * 0.35), 1.5 + r() * 2)
-    g.fillRect(w * 0.6 + o * 0.3 + w / 2, w * 0.6, 1.5 + r() * 2, size * (0.55 + r() * 0.35))
+    g.fillRect(w, w + o * 0.3 + w / 2, size * (0.6 + r() * 0.3), 1 + r() * 1.5)
+    g.fillRect(w + o * 0.3 + w / 2, w, 1 + r() * 1.5, size * (0.6 + r() * 0.3))
   }
-  g.globalAlpha = 1
+  return toTexture(c)
+}
+
+// 朱笔圈：一笔画成的圈，起笔重、收笔轻，首尾不完全相接。白色，交给材质着色。
+export function brushCircle({ size = 256, seed = 9 } = {}) {
+  const c = document.createElement('canvas')
+  c.width = c.height = size
+  const g = c.getContext('2d')
+  const r = rng(seed)
+  const cx = size / 2
+  const R = size * 0.36
+  g.fillStyle = '#fff'
+  const start = -Math.PI * 0.6
+  const sweep = Math.PI * 1.88
+  const steps = 220
+  for (let i = 0; i <= steps; i++) {
+    const t = i / steps
+    const a = start + t * sweep
+    const w = size * (0.055 - t * 0.03) * (0.9 + r() * 0.2)
+    const rr = R * (1 + Math.sin(t * 5 + seed) * 0.03)
+    g.globalAlpha = t > 0.85 ? 0.55 + r() * 0.4 : 0.9
+    g.beginPath()
+    g.arc(cx + Math.cos(a) * rr, cx + Math.sin(a) * rr, w / 2, 0, Math.PI * 2)
+    g.fill()
+  }
+  return toTexture(c)
+}
+
+// 朱笔叉：两笔
+export function brushCross({ size = 256, seed = 13 } = {}) {
+  const c = document.createElement('canvas')
+  c.width = c.height = size
+  const g = c.getContext('2d')
+  const r = rng(seed)
+  g.fillStyle = '#fff'
+  const stroke = (x0, y0, x1, y1) => {
+    for (let i = 0; i <= 120; i++) {
+      const t = i / 120
+      const w = size * (0.06 - t * 0.035)
+      g.globalAlpha = 0.85 + r() * 0.15
+      g.beginPath()
+      g.arc(x0 + (x1 - x0) * t, y0 + (y1 - y0) * t, w / 2, 0, Math.PI * 2)
+      g.fill()
+    }
+  }
+  stroke(size * 0.22, size * 0.2, size * 0.8, size * 0.8)
+  stroke(size * 0.78, size * 0.22, size * 0.22, size * 0.78)
+  return toTexture(c)
+}
+
+// 一滴墨：略扁的圆，边缘有细小的毛刺
+export function inkDot({ size = 128, seed = 17 } = {}) {
+  const c = document.createElement('canvas')
+  c.width = c.height = size
+  const g = c.getContext('2d')
+  const r = rng(seed)
+  const cx = size / 2
+  g.fillStyle = '#fff'
   g.beginPath()
-  g.arc(w * 1.1, w * 1.1, w * 0.75, 0, Math.PI * 2)
+  const n = 40
+  for (let i = 0; i <= n; i++) {
+    const a = (i / n) * Math.PI * 2
+    const rr = size * 0.36 * (1 + (r() - 0.5) * 0.12)
+    const x = cx + Math.cos(a) * rr
+    const y = cx + Math.sin(a) * rr * 0.94
+    i === 0 ? g.moveTo(x, y) : g.lineTo(x, y)
+  }
+  g.fill()
+  return toTexture(c)
+}
+
+// 金箔碎片：不规则的小多边形，边缘有折痕
+export function goldFlake({ size = 64, seed = 23 } = {}) {
+  const c = document.createElement('canvas')
+  c.width = c.height = size
+  const g = c.getContext('2d')
+  const r = rng(seed)
+  const cx = size / 2
+  g.fillStyle = '#fff'
+  g.beginPath()
+  const n = 5 + Math.floor(r() * 3)
+  for (let i = 0; i < n; i++) {
+    const a = (i / n) * Math.PI * 2 + r() * 0.5
+    const rr = size * (0.22 + r() * 0.24)
+    const x = cx + Math.cos(a) * rr
+    const y = cx + Math.sin(a) * rr
+    i === 0 ? g.moveTo(x, y) : g.lineTo(x, y)
+  }
+  g.closePath()
   g.fill()
   return toTexture(c)
 }

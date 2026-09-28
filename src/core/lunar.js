@@ -36,3 +36,14 @@ export async function lunarNow(date) {
   const zhi = l.getYearZhi()
   return { yearBranchNum: BRANCHES.indexOf(zhi) + 1, yearBranch: zhi, month: Math.abs(l.getMonth()), day: l.getDay(), leap: l.getMonth() < 0 }
 }
+
+// 干支纪时，如"丙午年 · 丁酉月 · 乙巳日 · 申时"（年、月按节气交接）
+export async function ganzhiLine(date, hourLabel) {
+  try {
+    const { Solar } = await import('lunar-javascript')
+    const l = Solar.fromDate(date).getLunar()
+    return `${l.getYearInGanZhiExact()}年 · ${l.getMonthInGanZhiExact()}月 · ${l.getDayInGanZhiExact()}日 · ${hourLabel}`
+  } catch {
+    return null
+  }
+}

@@ -1,11 +1,12 @@
-// 全部声音用 Web Audio 现场合成：大鼓、编钟、石磬、古琴拨弦、风声。不需要任何音频文件。
+// 声音全部用 Web Audio 现场合成，不需要任何音频文件。
+// 少而准：定格一声磬，墨滴一声"嗒"，每写一爻一声笔擦纸，六爻写完一声钟，盖印一声闷响。
+// 数东西时每数到一个，一声木鱼。
 let ctx = null
 let master = null
 let reverb = null
 let recordDest = null
-let droneNodes = null
 
-function impulse(seconds = 3.2, decay = 2.6) {
+function impulse(seconds = 3.4, decay = 2.8) {
   const rate = ctx.sampleRate
   const len = Math.floor(rate * seconds)
   const buf = ctx.createBuffer(2, len, rate)
@@ -29,8 +30,8 @@ export function unlockAudio() {
     if (!AC) return null
     ctx = new AC()
     const comp = ctx.createDynamicsCompressor()
-    comp.threshold.value = -14
-    comp.ratio.value = 4
+    comp.threshold.value = -16
+    comp.ratio.value = 3
     master = ctx.createGain()
     master.gain.value = 0.9
     master.connect(comp)
@@ -38,7 +39,7 @@ export function unlockAudio() {
     reverb = ctx.createConvolver()
     reverb.buffer = impulse()
     const wet = ctx.createGain()
-    wet.gain.value = 0.42
+    wet.gain.value = 0.38
     reverb.connect(wet)
     wet.connect(master)
     if (ctx.createMediaStreamDestination) {
@@ -54,6 +55,8 @@ export function audioStream() {
   return recordDest?.stream || null
 }
 
+const ready = () => ctx && ctx.state !== 'closed'
+
 function out(node, dry = 1, wet = 0.6) {
   const d = ctx.createGain()
   d.gain.value = dry
@@ -67,12 +70,14 @@ function out(node, dry = 1, wet = 0.6) {
   }
 }
 
-function noiseBuffer(seconds = 1) {
+function noise(seconds) {
   const len = Math.floor(ctx.sampleRate * seconds)
   const buf = ctx.createBuffer(1, len, ctx.sampleRate)
   const d = buf.getChannelData(0)
   for (let i = 0; i < len; i++) d[i] = Math.random() * 2 - 1
-  return buf
+  const src = ctx.createBufferSource()
+  src.buffer = buf
+  return src
 }
 
 function env(gainNode, t, attack, peak, decay) {
@@ -82,211 +87,117 @@ function env(gainNode, t, attack, peak, decay) {
   g.exponentialRampToValueAtTime(0.0001, t + attack + decay)
 }
 
-const ready = () => ctx && ctx.state !== 'closed'
+function partial(freq, amp, decay, t, wet = 0.7) {
+  const o = ctx.createOscillator()
+  o.frequency.value = freq
+  const g = ctx.createGain()
+  env(g, t, 0.003, amp, decay)
+  o.connect(g)
+  out(g, 1, wet)
+  o.start(t)
+  o.stop(t + decay + 0.05)
+}
 
-// 大鼓：低频下滑 + 鼓皮噪声
-export function drum(strength = 1) {
+// 编钟：非谐波泛音，两两微差出拍音，长余韵
+export function bell(freq = 110, strength = 1, length = 6) {
+  if (!ready()) return
+  const t = ctx.currentTime
+  for (const [ratio, amp, life] of [[0.5, 0.35, 1], [1, 1, 0.9], [1.19, 0.5, 0.7], [2, 0.35, 0.45], [2.74, 0.22, 0.3], [3.76, 0.12, 0.2]]) {
+    partial(freq * ratio - 0.8, 0.09 * amp * strength, length * life, t)
+    partial(freq * ratio + 0.8, 0.09 * amp * strength, length * life, t)
+  }
+}
+
+// 石磬：清亮，一击即收
+export function chime(freq = 1046, strength = 1) {
+  if (!ready()) return
+  const t = ctx.currentTime
+  for (const [ratio, amp, life] of [[1, 1, 1.6], [2.756, 0.35, 0.7], [5.404, 0.15, 0.35], [8.933, 0.06, 0.2]]) partial(freq * ratio, 0.11 * amp * strength, life, t, 0.8)
+}
+
+// 木鱼：数到一个东西，"笃"一声
+export function woodTick(strength = 1) {
   if (!ready()) return
   const t = ctx.currentTime
   const o = ctx.createOscillator()
-  o.type = 'sine'
-  o.frequency.setValueAtTime(120, t)
-  o.frequency.exponentialRampToValueAtTime(38, t + 0.35)
+  o.frequency.setValueAtTime(640, t)
+  o.frequency.exponentialRampToValueAtTime(470, t + 0.08)
   const g = ctx.createGain()
-  env(g, t, 0.004, 0.9 * strength, 1.1)
+  env(g, t, 0.002, 0.28 * strength, 0.1)
   o.connect(g)
-  out(g, 1, 0.35)
+  out(g, 1, 0.25)
   o.start(t)
-  o.stop(t + 1.3)
-  const n = ctx.createBufferSource()
-  n.buffer = noiseBuffer(0.3)
+  o.stop(t + 0.2)
+}
+
+// 一滴墨落在纸上："嗒"，带一点低沉的回响
+export function inkDrop() {
+  if (!ready()) return
+  const t = ctx.currentTime
+  const o = ctx.createOscillator()
+  o.frequency.setValueAtTime(1100, t)
+  o.frequency.exponentialRampToValueAtTime(260, t + 0.05)
+  const g = ctx.createGain()
+  env(g, t, 0.001, 0.22, 0.09)
+  o.connect(g)
+  out(g, 1, 0.6)
+  o.start(t)
+  o.stop(t + 0.2)
+  const low = ctx.createOscillator()
+  low.frequency.setValueAtTime(95, t)
+  low.frequency.exponentialRampToValueAtTime(60, t + 0.6)
+  const lg = ctx.createGain()
+  env(lg, t, 0.005, 0.3, 0.9)
+  low.connect(lg)
+  out(lg, 1, 0.5)
+  low.start(t)
+  low.stop(t + 1.1)
+}
+
+// 毛笔擦过宣纸：带通噪声，起笔重、收笔轻
+export function brush(duration = 0.34, strength = 1) {
+  if (!ready()) return
+  const t = ctx.currentTime
+  const n = noise(duration + 0.1)
   const f = ctx.createBiquadFilter()
-  f.type = 'lowpass'
-  f.frequency.value = 700
+  f.type = 'bandpass'
+  f.frequency.setValueAtTime(1400, t)
+  f.frequency.linearRampToValueAtTime(2600, t + duration)
+  f.Q.value = 0.7
+  const g = ctx.createGain()
+  g.gain.setValueAtTime(0.0001, t)
+  g.gain.exponentialRampToValueAtTime(0.16 * strength, t + 0.03)
+  g.gain.exponentialRampToValueAtTime(0.05 * strength, t + duration * 0.8)
+  g.gain.exponentialRampToValueAtTime(0.0001, t + duration)
+  n.connect(f)
+  f.connect(g)
+  out(g, 1, 0.2)
+  n.start(t)
+  n.stop(t + duration + 0.1)
+}
+
+// 盖印："砰"——低沉的一击加一声木质的敲击，不拖尾
+export function sealThud() {
+  if (!ready()) return
+  const t = ctx.currentTime
+  const o = ctx.createOscillator()
+  o.frequency.setValueAtTime(92, t)
+  o.frequency.exponentialRampToValueAtTime(42, t + 0.25)
+  const g = ctx.createGain()
+  env(g, t, 0.003, 0.95, 0.55)
+  o.connect(g)
+  out(g, 1, 0.25)
+  o.start(t)
+  o.stop(t + 0.7)
+  const n = noise(0.1)
+  const f = ctx.createBiquadFilter()
+  f.type = 'bandpass'
+  f.frequency.value = 850
+  f.Q.value = 2.5
   const ng = ctx.createGain()
-  env(ng, t, 0.002, 0.5 * strength, 0.18)
+  env(ng, t, 0.001, 0.55, 0.07)
   n.connect(f)
   f.connect(ng)
   out(ng, 1, 0.3)
   n.start(t)
-}
-
-// 编钟：非谐波泛音，两两微差产生拍音，长余韵
-export function bell(freq = 220, strength = 1, length = 4) {
-  if (!ready()) return
-  const t = ctx.currentTime
-  const partials = [
-    [1, 1, 1],
-    [2.32, 0.55, 0.7],
-    [4.25, 0.35, 0.45],
-    [6.63, 0.2, 0.3],
-    [9.38, 0.12, 0.2],
-  ]
-  for (const [ratio, amp, life] of partials) {
-    for (const detune of [-1.2, 1.2]) {
-      const o = ctx.createOscillator()
-      o.type = 'sine'
-      o.frequency.value = freq * ratio + detune
-      const g = ctx.createGain()
-      env(g, t, 0.003, 0.16 * amp * strength, length * life)
-      o.connect(g)
-      out(g, 1, 0.7)
-      o.start(t)
-      o.stop(t + length * life + 0.1)
-    }
-  }
-  // 敲击声
-  const n = ctx.createBufferSource()
-  n.buffer = noiseBuffer(0.05)
-  const f = ctx.createBiquadFilter()
-  f.type = 'bandpass'
-  f.frequency.value = freq * 6
-  const ng = ctx.createGain()
-  env(ng, t, 0.001, 0.25 * strength, 0.04)
-  n.connect(f)
-  f.connect(ng)
-  out(ng, 1, 0.4)
-  n.start(t)
-}
-
-// 石磬：清亮短促
-export function chime(freq = 880, strength = 1) {
-  if (!ready()) return
-  const t = ctx.currentTime
-  for (const [ratio, amp, life] of [[1, 1, 1], [2.76, 0.4, 0.5], [5.4, 0.2, 0.3], [8.93, 0.1, 0.2]]) {
-    const o = ctx.createOscillator()
-    o.frequency.value = freq * ratio
-    const g = ctx.createGain()
-    env(g, t, 0.002, 0.12 * amp * strength, 1.6 * life)
-    o.connect(g)
-    out(g, 1, 0.8)
-    o.start(t)
-    o.stop(t + 1.8 * life)
-  }
-}
-
-// 古琴拨弦：Karplus-Strong，离线算好一段波形
-const PENTATONIC = [146.83, 164.81, 196.0, 220.0, 246.94, 293.66, 329.63, 392.0, 440.0, 493.88]
-export function pluck(step = 0, strength = 1) {
-  if (!ready()) return
-  const freq = PENTATONIC[Math.max(0, Math.min(PENTATONIC.length - 1, step))]
-  const rate = ctx.sampleRate
-  const len = Math.floor(rate * 2.2)
-  const buf = ctx.createBuffer(1, len, rate)
-  const d = buf.getChannelData(0)
-  const period = Math.floor(rate / freq)
-  const ring = new Float32Array(period)
-  for (let i = 0; i < period; i++) ring[i] = Math.random() * 2 - 1
-  let idx = 0
-  for (let i = 0; i < len; i++) {
-    const next = (idx + 1) % period
-    const v = (ring[idx] + ring[next]) * 0.4985
-    d[i] = ring[idx]
-    ring[idx] = v
-    idx = next
-  }
-  const src = ctx.createBufferSource()
-  src.buffer = buf
-  const f = ctx.createBiquadFilter()
-  f.type = 'lowpass'
-  f.frequency.value = 2400
-  const g = ctx.createGain()
-  g.gain.value = 0.5 * strength
-  src.connect(f)
-  f.connect(g)
-  out(g, 1, 0.6)
-  src.start()
-}
-
-// 风声/气流：带通噪声扫频
-export function whoosh(duration = 1.2, up = true, strength = 1) {
-  if (!ready()) return
-  const t = ctx.currentTime
-  const n = ctx.createBufferSource()
-  n.buffer = noiseBuffer(duration + 0.2)
-  const f = ctx.createBiquadFilter()
-  f.type = 'bandpass'
-  f.Q.value = 1.2
-  f.frequency.setValueAtTime(up ? 180 : 2400, t)
-  f.frequency.exponentialRampToValueAtTime(up ? 2600 : 160, t + duration)
-  const g = ctx.createGain()
-  g.gain.setValueAtTime(0.0001, t)
-  g.gain.exponentialRampToValueAtTime(0.35 * strength, t + duration * 0.7)
-  g.gain.exponentialRampToValueAtTime(0.0001, t + duration)
-  n.connect(f)
-  f.connect(g)
-  out(g, 1, 0.5)
-  n.start(t)
-  n.stop(t + duration + 0.2)
-}
-
-// 裂响：翻爻时
-export function crack(strength = 1) {
-  if (!ready()) return
-  const t = ctx.currentTime
-  const n = ctx.createBufferSource()
-  n.buffer = noiseBuffer(0.4)
-  const f = ctx.createBiquadFilter()
-  f.type = 'highpass'
-  f.frequency.value = 1800
-  const g = ctx.createGain()
-  env(g, t, 0.001, 0.6 * strength, 0.25)
-  n.connect(f)
-  f.connect(g)
-  out(g, 1, 0.5)
-  n.start(t)
-  drum(0.8 * strength)
-}
-
-// 盖印：闷响 + 木声 + 钟尾
-export function sealThud() {
-  if (!ready()) return
-  drum(1.3)
-  const t = ctx.currentTime
-  const n = ctx.createBufferSource()
-  n.buffer = noiseBuffer(0.12)
-  const f = ctx.createBiquadFilter()
-  f.type = 'bandpass'
-  f.frequency.value = 1100
-  f.Q.value = 3
-  const g = ctx.createGain()
-  env(g, t, 0.001, 0.7, 0.09)
-  n.connect(f)
-  f.connect(g)
-  out(g, 1, 0.3)
-  n.start(t)
-  setTimeout(() => bell(110, 0.9, 6), 60)
-}
-
-// 低沉持续音：动爻烧红时的张力
-export function drone(on) {
-  if (!ready()) return
-  const t = ctx.currentTime
-  if (on && !droneNodes) {
-    const g = ctx.createGain()
-    g.gain.setValueAtTime(0.0001, t)
-    g.gain.exponentialRampToValueAtTime(0.22, t + 0.6)
-    const oscs = [55, 82.5, 110.4].map((f) => {
-      const o = ctx.createOscillator()
-      o.type = 'sawtooth'
-      o.frequency.value = f
-      o.connect(g)
-      o.start(t)
-      return o
-    })
-    const lp = ctx.createBiquadFilter()
-    lp.type = 'lowpass'
-    lp.frequency.setValueAtTime(200, t)
-    lp.frequency.exponentialRampToValueAtTime(1400, t + 1.2)
-    g.connect(lp)
-    out(lp, 1, 0.5)
-    droneNodes = { g, oscs }
-  } else if (!on && droneNodes) {
-    const { g, oscs } = droneNodes
-    g.gain.cancelScheduledValues(t)
-    g.gain.setValueAtTime(g.gain.value, t)
-    g.gain.exponentialRampToValueAtTime(0.0001, t + 0.15)
-    oscs.forEach((o) => o.stop(t + 0.2))
-    droneNodes = null
-  }
 }

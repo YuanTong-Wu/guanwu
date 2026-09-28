@@ -1,4 +1,4 @@
-// 邵雍"先天六十四卦圆图"做成的金色转盘：外圈六十四卦，内圈先天八卦，中心太极。
+// 邵雍"先天六十四卦圆图"做成的细线转盘（白线黑底）：外圈六十四卦，内圈先天八卦，中心太极。
 // 梅花易数相传出自邵雍，所以用他的圆图作为整场仪式的背景仪器。
 import * as THREE from 'three'
 import { HEXAGRAMS, TRIGRAMS } from '../core/hexagrams.js'
@@ -58,8 +58,8 @@ function ringCanvas(size) {
     g.stroke()
     g.globalAlpha = 1
   }
-  circle(R * 0.985, 2, 0.8)
-  circle(R * 0.955, 1, 0.5)
+  circle(R * 0.985, 1.2, 0.7)
+  circle(R * 0.955, 0.8, 0.4)
   // 刻度：64 格
   for (let i = 0; i < 64; i++) {
     const a = ringAngle(i) + Math.PI / 64
@@ -74,26 +74,27 @@ function ringCanvas(size) {
   // 六十四卦
   for (const h of HEXAGRAMS) {
     const i = xiantianIndex(h)
-    drawLines(g, cx, cy, ringAngle(i), R * 0.72, R * 0.036, R * 0.068, h.lines, R * 0.017)
+    drawLines(g, cx, cy, ringAngle(i), R * 0.74, R * 0.032, R * 0.052, h.lines, R * 0.009)
   }
-  circle(R * 0.69, 1.5, 0.6)
-  circle(R * 0.665, 1, 0.35)
+  circle(R * 0.7, 1, 0.5)
+  circle(R * 0.68, 0.8, 0.3)
   // 先天八卦 + 卦名
   for (const t of Object.values(TRIGRAMS)) {
     const th = (TRIGRAM_ANGLE[t.num] * Math.PI) / 180
-    drawLines(g, cx, cy, th, R * 0.44, R * 0.055, R * 0.17, t.lines, R * 0.028)
+    drawLines(g, cx, cy, th, R * 0.46, R * 0.04, R * 0.1, t.lines, R * 0.012)
     g.save()
-    g.font = `${R * 0.085}px ${FONTS.brush}`
+    g.font = `${R * 0.05}px ${FONTS.serif}`
     g.textAlign = 'center'
     g.textBaseline = 'middle'
     const nx = cx + Math.cos(th) * R * 0.6
     const ny = cy - Math.sin(th) * R * 0.6
+    g.globalAlpha = 0.8
     g.translate(nx, ny)
     g.rotate(Math.PI / 2 - th)
     g.fillText(t.name, 0, 0)
     g.restore()
   }
-  circle(R * 0.39, 1.5, 0.6)
+  circle(R * 0.39, 1, 0.45)
   return c
 }
 
@@ -105,7 +106,7 @@ function taijiCanvas(size) {
   const cx = size / 2
   g.fillStyle = '#fff'
   g.strokeStyle = '#fff'
-  g.lineWidth = 3
+  g.lineWidth = 2
   g.beginPath()
   g.arc(cx, cx, r, 0, Math.PI * 2)
   g.stroke()
@@ -151,7 +152,7 @@ const frag = /* glsl */ `
     float d = abs(mod(ang - uMarkAngle + 3.1416, 6.2832) - 3.1416);
     float mark = uMark * smoothstep(0.08, 0.0, d) * step(0.34, length(p));
     if (a < 0.01) discard;
-    vec3 col = uColor * uGlow + vec3(1.0, 0.35, 0.15) * mark * 3.0;
+    vec3 col = mix(uColor * uGlow, vec3(0.72, 0.2, 0.12), clamp(mark, 0.0, 1.0));
     gl_FragColor = vec4(col * a, a);
   }
 `
@@ -160,7 +161,7 @@ function goldMaterial(texture, opacity) {
   return new THREE.ShaderMaterial({
     uniforms: {
       uMap: { value: texture },
-      uColor: { value: new THREE.Color(0xd9a94e) },
+      uColor: { value: new THREE.Color(0xe8e2d4) },
       uOpacity: { value: opacity },
       uGlow: { value: 1.0 },
       uSweep: { value: 1 },
@@ -172,98 +173,10 @@ function goldMaterial(texture, opacity) {
     transparent: true,
     depthWrite: false,
     depthTest: false,
-    blending: THREE.AdditiveBlending,
+    blending: THREE.CustomBlending,
+    blendSrc: THREE.OneFactor,
+    blendDst: THREE.OneMinusSrcAlphaFactor,
   })
-}
-
-// 十二地支时辰盘：子在正上，顺时针排开
-const BRANCH_CHARS = ['子', '丑', '寅', '卯', '辰', '巳', '午', '未', '申', '酉', '戌', '亥']
-
-function branchCanvas(size) {
-  const c = document.createElement('canvas')
-  c.width = c.height = size
-  const g = c.getContext('2d')
-  const cx = size / 2
-  const R = size / 2
-  g.strokeStyle = '#fff'
-  g.fillStyle = '#fff'
-  g.lineWidth = 3
-  g.beginPath()
-  g.arc(cx, cx, R * 0.97, 0, Math.PI * 2)
-  g.stroke()
-  g.lineWidth = 1.5
-  g.beginPath()
-  g.arc(cx, cx, R * 0.62, 0, Math.PI * 2)
-  g.stroke()
-  g.font = `${R * 0.2}px ${FONTS.brush}`
-  g.textAlign = 'center'
-  g.textBaseline = 'middle'
-  BRANCH_CHARS.forEach((ch, i) => {
-    const a = -Math.PI / 2 + (i / 12) * Math.PI * 2
-    // 分隔刻度
-    const b = a + Math.PI / 12
-    g.beginPath()
-    g.moveTo(cx + Math.cos(b) * R * 0.62, cx + Math.sin(b) * R * 0.62)
-    g.lineTo(cx + Math.cos(b) * R * 0.97, cx + Math.sin(b) * R * 0.97)
-    g.stroke()
-    g.save()
-    g.translate(cx + Math.cos(a) * R * 0.8, cx + Math.sin(a) * R * 0.8)
-    g.rotate(a + Math.PI / 2)
-    g.fillText(ch, 0, 0)
-    g.restore()
-  })
-  return c
-}
-
-export class BranchRing {
-  constructor({ diameter }) {
-    const tex = new THREE.CanvasTexture(branchCanvas(1024))
-    tex.colorSpace = THREE.SRGBColorSpace
-    tex.anisotropy = 8
-    this.mat = goldMaterial(tex, 0)
-    this.mat.uniforms.uColor.value.set(0xf2c46b)
-    this.object = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), this.mat)
-    this.object.scale.set(diameter, diameter, 1)
-    this.object.renderOrder = 3
-    this.spin = 0
-    this.target = null
-  }
-
-  set opacity(v) {
-    this.mat.uniforms.uOpacity.value = v
-  }
-
-  set glow(v) {
-    this.mat.uniforms.uGlow.value = v
-  }
-
-  // 转几圈后把第 index 个地支停在正上方，并点亮它
-  spinTo(index, turns = 3) {
-    // 第 index 支在盘面上的角度是 π/2 - index·30°，逆时针转 index·30° 就到正上方
-    let t = (index / 12) * Math.PI * 2
-    while (t < this.object.rotation.z + turns * Math.PI * 2) t += Math.PI * 2
-    this.target = t
-    this.mat.uniforms.uMarkAngle.value = Math.PI / 2 - (index / 12) * Math.PI * 2
-  }
-
-  set mark(v) {
-    this.mat.uniforms.uMark.value = v
-  }
-
-  update(dt) {
-    if (this.target != null) {
-      const r = this.object.rotation
-      r.z += (this.target - r.z) * Math.min(1, dt * 3.2)
-    } else {
-      this.object.rotation.z += dt * 0.3
-    }
-  }
-
-  dispose() {
-    this.mat.uniforms.uMap.value.dispose()
-    this.mat.dispose()
-    this.object.geometry.dispose()
-  }
 }
 
 export class BaguaRing {
@@ -286,6 +199,7 @@ export class BaguaRing {
     this.speed = 0.05
     this.targetRotation = null
     this.tilt = 0
+    this.breathe = false
   }
 
   setDiameter(d) {
@@ -296,7 +210,7 @@ export class BaguaRing {
 
   set opacity(v) {
     this.ringMat.uniforms.uOpacity.value = v
-    this.taijiMat.uniforms.uOpacity.value = v * 0.9
+    this.taijiMat.uniforms.uOpacity.value = v * 0.55
   }
 
   set glow(v) {
@@ -323,7 +237,9 @@ export class BaguaRing {
     this.ringMat.uniforms.uMark.value = v
   }
 
-  update(dt) {
+  update(dt, time = 0) {
+    // 像天秩的周天盘：在平面与立体之间缓缓往复
+    if (this.breathe) this.tilt = Math.sin(time * 0.21) * 0.62
     if (this.targetRotation != null) {
       const r = this.spinner.rotation
       r.z += (this.targetRotation - r.z) * Math.min(1, dt * 2.2)

@@ -159,7 +159,7 @@ function parseInline(s, notes) {
   return parts.map((p) => (typeof p === 'string' ? p.replace(/\s+/g, '') : { a: p.a.replace(/\s+/g, ''), b: p.b.replace(/\s+/g, '') }))
 }
 
-const render = (parts, pick = () => 'a') => parts.map((p, i) => (typeof p === 'string' ? p : p[pick(i)])).join('')
+const render = (parts) => parts.map((p) => (typeof p === 'string' ? p : p.a)).join('')
 const variantsOf = (parts) => parts.filter((p) => typeof p !== 'string')
 
 // 取"易經"一节：** 卦辞，*** 卦辞续行，*# 爻辞

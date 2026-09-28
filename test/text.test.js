@@ -16,9 +16,9 @@ test('line names', () => {
 })
 
 test('labels and aliases', () => {
-  assert.deepEqual(labelOf('bird'), { name: '鸟', measure: '只' })
-  assert.deepEqual(labelOf('sofa'), { name: '沙发', measure: '张' })
-  assert.deepEqual(labelOf('unknown-thing'), { name: '物', measure: '件' })
+  assert.deepEqual(labelOf('bird'), { name: '鸟', measure: '只', short: '鸟' })
+  assert.deepEqual(labelOf('sofa'), { name: '沙发', measure: '张', short: '榻' })
+  assert.deepEqual(labelOf('unknown-thing'), { name: '物', measure: '件', short: '物' })
 })
 
 test('pickCountable takes the most numerous category, ties broken by area', () => {

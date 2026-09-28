@@ -1,23 +1,23 @@
-// 取景时叠在画面上的毛笔框：每个被识别的东西四角刷出金色笔触，旁边砸下一个中文数字。
+// 取景时叠在画面上的细笔框：每个被识别的东西四角一笔，旁边一个中文数字。
 import * as THREE from 'three'
 import { brushCorner } from './textures.js'
 import { Sprite } from './sprites.js'
 import { spriteMaterial } from './sprites.js'
 import { toChinese } from '../core/numerals.js'
 
-const GOLD = 0xf2c46b
+const WHITE = 0xece5d4
 
 class Frame {
   constructor(cornerTex, index) {
     this.object = new THREE.Group()
     this.corners = []
     for (let k = 0; k < 4; k++) {
-      const m = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), spriteMaterial(cornerTex, GOLD, { glow: 1.5 }))
+      const m = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), spriteMaterial(cornerTex, WHITE))
       m.rotation.z = [0, -Math.PI / 2, Math.PI, Math.PI / 2][k]
       this.object.add(m)
       this.corners.push(m)
     }
-    this.number = Sprite.text(toChinese(index + 1), 44, 0xfff1d0, { size: 256, glow: 1.3 })
+    this.number = Sprite.text(toChinese(index + 1), 38, WHITE, { size: 200 })
     this.object.add(this.number.object)
     this.cur = null
     this.life = 0
@@ -40,7 +40,7 @@ class Frame {
     c.cy += (t.cy - c.cy) * k
     c.w += (t.w - c.w) * k
     c.h += (t.h - c.h) * k
-    const s = Math.max(22, Math.min(c.w, c.h) * 0.32)
+    const s = Math.max(18, Math.min(c.w, c.h) * 0.22)
     const pos = [
       [c.cx - c.w / 2 + s / 2, c.cy + c.h / 2 - s / 2],
       [c.cx + c.w / 2 - s / 2, c.cy + c.h / 2 - s / 2],
@@ -55,9 +55,8 @@ class Frame {
       m.scale.set(s, s, 1)
       m.material.uniforms.uOpacity.value = appear * (this.alive ? 1 : 0)
     })
-    this.number.object.position.set(c.cx - c.w / 2 + 6, c.cy + c.h / 2 + 30, 0)
-    this.number.stamp(Math.min(1, this.life / 0.3), 2.6)
-    if (!this.alive) this.number.opacity = 0
+    this.number.object.position.set(c.cx - c.w / 2 + 6, c.cy + c.h / 2 + 26, 0)
+    this.number.opacity = appear
   }
 
   dispose() {

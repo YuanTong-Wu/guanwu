@@ -1,6 +1,6 @@
 // 演示模式：画一张"树枝上两只鸟"的示意图，跳过相机和识别，直接跑一遍仪式。
 // 用法：在网址后加 ?demo（可选 &hour=15 固定时辰，&n=3 改鸟的数量）
-import { labelOf } from './core/labels.js'
+import { labelOf, pickCountable } from './core/labels.js'
 
 function paintScene(n) {
   const c = document.createElement('canvas')
@@ -86,7 +86,20 @@ function paintScene(n) {
   return { canvas: c, boxes }
 }
 
-export function runDemo({ begin }) {
+// ?demo&img=/_test/cups.jpg：用一张真照片走完整流程（真识别、真入画）
+async function loadImage(url) {
+  const img = new Image()
+  img.src = url
+  await img.decode()
+  const c = document.createElement('canvas')
+  const k = Math.min(1, 1280 / Math.max(img.naturalWidth, img.naturalHeight))
+  c.width = Math.round(img.naturalWidth * k)
+  c.height = Math.round(img.naturalHeight * k)
+  c.getContext('2d', { willReadFrequently: true }).drawImage(img, 0, 0, c.width, c.height)
+  return c
+}
+
+export function runDemo({ begin, detectPhoto, beginTime }) {
   const q = new URLSearchParams(location.search)
   const n = Math.max(1, Math.min(9, Number(q.get('n')) || 2))
   const hour = q.get('hour')
@@ -104,11 +117,41 @@ export function runDemo({ begin }) {
       }
     }
   }
-  const { canvas, boxes } = paintScene(n)
-  const items = boxes.map((box) => ({ category: 'bird', score: 0.9, box }))
   const at = q.get('at')
   setTimeout(async () => {
-    await begin(canvas, { items, count: n, category: 'bird', label: labelOf('bird') }, { mirror: false })
+    const img = q.get('img')
+    if (img) {
+      const canvas = await loadImage(img)
+      const pick = pickCountable(await detectPhoto(canvas))
+      console.log('demo detections', pick && pick.category, pick && pick.count)
+      await (pick ? begin(canvas, pick, { mirror: false }) : beginTime(canvas))
+    } else {
+      const { canvas, boxes } = paintScene(n)
+      const items = boxes.map((box) => ({ category: 'bird', score: 0.9, box }))
+      await begin(canvas, { items, count: n, category: 'bird', label: labelOf('bird') }, { mirror: false })
+    }
+    // ?snaps=秒,秒…：依次快进到这些时刻，把画面存到开发服务器的 .snaps/ 目录
+    let snaps = q.get('snaps')
+    // ?snapfps=30&snapto=16：按帧率连续截图，用来合成预览视频
+    const fps = Number(q.get('snapfps'))
+    if (fps) {
+      const to = Number(q.get('snapto')) || 16
+      snaps = Array.from({ length: Math.floor(to * fps) }, (_, i) => (i / fps).toFixed(3)).join(',')
+    }
+    if (snaps) {
+      const dbg = window.__wq
+      dbg.paused = true
+      const tag = q.get('tag') || 'f'
+      for (const t of snaps.split(',').map(Number)) {
+        while (dbg.ritual && dbg.ritual.time < t) dbg.stage.frame(1 / 60)
+        dbg.stage.frame(0)
+        const url = dbg.stage.canvas.toDataURL('image/jpeg', 0.82)
+        const name = fps ? `${tag}-${String(Math.round(t * fps)).padStart(4, '0')}` : `${tag}-${String(t).padStart(5, '0')}`
+        await fetch(`/__snap?name=${name}`, { method: 'POST', body: url })
+      }
+      document.title = 'snaps done'
+      return
+    }
     // ?at=秒：快进到那一刻并冻结，方便逐帧检查
     if (at != null) {
       const dbg = window.__wq

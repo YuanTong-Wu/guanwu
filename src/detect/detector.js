@@ -1,9 +1,11 @@
-// 本地物体识别：MediaPipe ObjectDetector（Apache-2.0）+ EfficientDet-Lite0（COCO 80 类）。
-// 模型和 wasm 都放在自己的站点下（public/models、public/mediapipe），不连谷歌，画面不出手机。
+// 本地物体识别：MediaPipe ObjectDetector（Apache-2.0）+ EfficientDet-Lite0 int8（COCO 80 类）。
+// 固定用 0.10.35：1.x 起内置了无法关闭的遥测（向谷歌服务器回报），既违背"画面不出手机"，在国内也连不上。
+// int8 模型只能用 CPU 后端，放到 GPU 上会静默地返回 0 个结果。
+// 模型和 wasm 都放在自己的站点下（public/models、public/mediapipe）。
 const BASE = import.meta.env.BASE_URL || '/'
 const MODEL_URL = `${BASE}models/efficientdet_lite0.tflite`
 const WASM_BASE = `${BASE}mediapipe`
-const SCORE = 0.35
+const SCORE = 0.3
 
 // 下载模型并报告进度（0–1）
 async function fetchWithProgress(url, onProgress) {
@@ -30,14 +32,14 @@ async function fetchWithProgress(url, onProgress) {
   return out
 }
 
-function convert(result) {
+function convert(result, minScore) {
   return (result?.detections || [])
     .map((d) => {
       const c = d.categories?.[0]
       const b = d.boundingBox
       return c && b ? { category: c.categoryName, score: c.score, box: { x: b.originX, y: b.originY, width: b.width, height: b.height } } : null
     })
-    .filter((d) => d && d.score >= SCORE)
+    .filter((d) => d && d.score >= minScore)
 }
 
 export async function loadDetector(onProgress) {
@@ -46,19 +48,12 @@ export async function loadDetector(onProgress) {
     fetchWithProgress(MODEL_URL, onProgress),
   ])
   const fileset = await FilesetResolver.forVisionTasks(WASM_BASE)
-  const make = (delegate) =>
-    ObjectDetector.createFromOptions(fileset, {
-      baseOptions: { modelAssetBuffer: model, delegate },
-      runningMode: 'VIDEO',
-      scoreThreshold: SCORE,
-      maxResults: 24,
-    })
-  let det
-  try {
-    det = await make('GPU')
-  } catch {
-    det = await make('CPU')
-  }
+  const det = await ObjectDetector.createFromOptions(fileset, {
+    baseOptions: { modelAssetBuffer: model, delegate: 'CPU' },
+    runningMode: 'VIDEO',
+    scoreThreshold: 0.2,
+    maxResults: 60,
+  })
   onProgress?.(1)
   let mode = 'VIDEO'
   let lastTs = 0
@@ -68,13 +63,16 @@ export async function loadDetector(onProgress) {
       // 时间戳必须单调递增
       const ts = Math.max(lastTs + 1, Math.round(now))
       lastTs = ts
-      return convert(det.detectForVideo(video, ts))
+      return convert(det.detectForVideo(video, ts), SCORE)
     },
+    // 定格的照片：先按常规阈值；一个都没有时放宽到 0.2 再试
     async detectImage(image) {
       await det.setOptions({ runningMode: 'IMAGE' })
       mode = 'IMAGE'
       try {
-        return convert(det.detect(image))
+        const raw = det.detect(image)
+        const found = convert(raw, SCORE)
+        return found.length ? found : convert(raw, 0.2)
       } finally {
         await det.setOptions({ runningMode: 'VIDEO' })
         mode = 'VIDEO'

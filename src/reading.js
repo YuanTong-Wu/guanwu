@@ -23,7 +23,7 @@ function section(title, classic, plain) {
   return s
 }
 
-export function renderReading(cast, subject) {
+export function renderReading(cast, subject, label) {
   const o = TEXT.get(cast.original.num)
   const c = TEXT.get(cast.changed.num)
   const po = PLAIN_BY.get(cast.original.num)
@@ -43,7 +43,7 @@ export function renderReading(cast, subject) {
   root.append(section(`变卦　${c.name}${pc ? `　${pc.keyword}` : ''}`, `${c.name}：${c.judgment}`, pc?.summary))
 
   const how = el('div', 'how')
-  const caps = formulaCaptions(cast, subject)
+  const caps = formulaCaptions(cast, label)
   const rel = tiYongRelation(cast.ti, cast.yong)
   const ruleNote =
     cast.method === 'count' && cast.rule !== 'count+hour'
@@ -51,7 +51,7 @@ export function renderReading(cast, subject) {
       : cast.method === 'time'
         ? '眼前没数到东西时，改用《梅花易数》年月日时起卦。'
         : ''
-  how.append(el('p', null, `怎么算出来的：${caps.upper}；${caps.lower}；${caps.moving}。`))
+  how.append(el('p', null, `起卦之法：${caps.upper}；${caps.lower}；${caps.moving}。`))
   how.append(
     el(
       'p',
