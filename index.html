@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no" />
+    <meta name="theme-color" content="#050505" />
+    <meta name="description" content="心里想一件事，对着眼前的东西扫一下。按《梅花易数》物数占起卦。画面只在你的手机里处理。" />
+    <title>万物起卦</title>
+    <link rel="stylesheet" href="/src/style.css" />
+  </head>
+  <body>
+    <canvas id="stage" aria-hidden="true"></canvas>
+    <video id="camera" playsinline muted autoplay></video>
+    <input id="photo-input" type="file" accept="image/*" capture="environment" hidden />
+
+    <main id="ui">
+      <section id="home" class="screen active" aria-labelledby="home-title">
+        <h1 id="home-title" class="title">万物起卦</h1>
+        <p class="subtitle">心里想一件事<br />对着眼前的东西扫一下</p>
+        <button id="start" class="seal-button" type="button" aria-label="开始起卦"><span>起卦</span></button>
+        <p id="inapp-tip" class="inapp-tip" hidden>在这里相机可能打不开。点右上角"…"，选"在浏览器打开"效果最好</p>
+        <p class="footnote">画面只在你的手机里处理，不上传<br />典籍文化体验 · 仅供娱乐</p>
+      </section>
+
+      <section id="loading" class="screen" aria-live="polite">
+        <div class="spinner" aria-hidden="true"></div>
+        <p id="loading-text">正在准备…</p>
+      </section>
+
+      <section id="scan" class="screen" aria-live="polite">
+        <p id="scan-hint" class="scan-hint">对准想数的东西，稳住手机</p>
+        <p id="scan-count" class="scan-count"></p>
+        <div class="scan-actions">
+          <button id="lock" class="seal-button small" type="button" aria-label="就数这些，起卦"><span>就这些</span></button>
+        </div>
+        <div class="scan-fallbacks">
+          <button id="use-photo" class="link-button" type="button">改用拍照</button>
+          <button id="use-time" class="link-button" type="button">以此刻起卦</button>
+        </div>
+      </section>
+
+      <section id="ended" class="screen" aria-live="polite">
+        <figure id="poster-wrap" class="poster" hidden>
+          <img id="poster" alt="本次起卦的画面，长按可保存" />
+          <figcaption>长按图片保存。要存视频，请点右上角"…"，选"在浏览器打开"。</figcaption>
+        </figure>
+        <div class="end-actions">
+          <button id="show-reading" class="primary-button" type="button">看解读</button>
+          <button id="save-video" class="ghost-button" type="button" hidden>保存视频</button>
+          <button id="again" class="ghost-button" type="button">再起一卦</button>
+        </div>
+      </section>
+
+      <section id="reading" class="panel" aria-labelledby="reading-title" hidden>
+        <div class="panel-inner">
+          <button id="close-reading" class="close-button" type="button" aria-label="关闭">×</button>
+          <div id="reading-body"></div>
+        </div>
+      </section>
+
+      <div id="toast" class="toast" role="status" hidden></div>
+    </main>
+    <script type="module" src="/src/main.js"></script>
+  </body>
+</html>

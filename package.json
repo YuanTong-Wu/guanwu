@@ -1,0 +1,26 @@
+{
+  "name": "wanwu-qigua",
+  "version": "0.1.0",
+  "private": true,
+  "description": "万物起卦：对着眼前的东西一扫，按《梅花易数》物数占起卦。",
+  "type": "module",
+  "license": "MIT",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "test": "node --test \"test/*.test.js\"",
+    "check": "vite build && node scripts/check-dist.mjs",
+    "data": "node scripts/build-zhouyi.mjs",
+    "collate": "node scripts/collate.mjs",
+    "fonts": "node scripts/font-chars.mjs && python3 scripts/build-fonts.py"
+  },
+  "devDependencies": {
+    "vite": "^8.3.1"
+  },
+  "dependencies": {
+    "@mediapipe/tasks-vision": "^1.0.1",
+    "lunar-javascript": "^1.7.7",
+    "three": "^0.186.1"
+  }
+}
