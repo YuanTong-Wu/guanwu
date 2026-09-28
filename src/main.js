@@ -17,7 +17,7 @@ const canvas = $('stage')
 const video = $('camera')
 const REDUCED = matchMedia('(prefers-reduced-motion: reduce)').matches
 // 抖音、微信等内置浏览器：相机常常不可用，也不能下载文件
-const IN_APP = /aweme|BytedanceWebview|Douyin|MicroMessenger|QQ\/|Weibo|Toutiao|NewsArticle|Kwai|XiaoHongShu|DingTalk|Alipay/i.test(navigator.userAgent)
+const IN_APP = /aweme|BytedanceWebview|Douyin|MicroMessenger|QQ\/|Weibo|Toutiao|NewsArticle|Kwai|XiaoHongShu|xhsdiscover|DingTalk|Alipay/i.test(navigator.userAgent)
 if (IN_APP) $('inapp-tip').hidden = false
 
 // 状态：home → loading → scan（picking 为选照片中）→ ritual → ended
