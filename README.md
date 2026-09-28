@@ -41,7 +41,7 @@
 
 ## 隐私
 
-识别模型（EfficientDet-Lite0，约 4.6 MB）和运行时都放在自己的站点下，画面只在手机里处理，不上传。
+画面只在手机里处理，不上传。识别模型（EfficientDet-Lite0，约 4.6 MB）和运行时都放在自己的站点下。最大的一个文件（MediaPipe 的 wasm，11 MB）会先从国内的 npm 镜像 [npmmirror](https://npmmirror.com) 下载，和本站那份逐字节核对（SHA-256）无误才用；镜像连不上或不一致，就用本站的。镜像能看到访客的 IP，和打开任何网页一样，看不到画面。
 
 ## 本地运行
 
@@ -88,6 +88,8 @@ cloudflared tunnel --url https://localhost:4443 --no-tls-verify
 `npm run build` 生成 `dist/`，是纯静态文件，放到任何静态托管都行。所有资源都是同源的，不依赖谷歌、jsDelivr 等在国内不稳定的域名。
 
 `node scripts/compress.mjs` 会给大文件预先压好 `.br`/`.gz`，首次打开约 6 MB（不压缩约 18 MB）。托管要能按 `Accept-Encoding` 发这些压缩版，`.wasm` 要用 `application/wasm`。
+
+免费托管可以用 [Vercel](https://vercel.com)（仓库里有 `vercel.json`）：在仓库根目录运行 `npx vercel deploy --prod`，再绑定自己的域名。国内访问时，域名的 A 记录用 `76.76.21.21`，不要用面板给的 `216.198.79.x`（2026 年 9 月起中国移动连不上）。
 
 自己有一台服务器（比如不用备案的香港服务器）时，可以用仓库里的脚本：
 

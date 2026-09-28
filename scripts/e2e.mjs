@@ -25,12 +25,27 @@ const browser = await puppeteer.launch({
   ],
 })
 const errors = []
+// MIRROR=block 让国内 npm 镜像连不上，MIRROR=tamper 让它返回错的文件：两种都应退回自己站点上的 wasm
+const MIRROR = process.env.MIRROR || ''
+const wasmFrom = new Set()
+async function watchWasm(page) {
+  if (MIRROR) {
+    await page.setRequestInterception(true)
+    page.on('request', (r) => {
+      if (!r.url().includes('registry.npmmirror.com')) return r.continue()
+      if (MIRROR === 'block') return r.abort()
+      r.respond({ status: 200, contentType: 'application/wasm', headers: { 'access-control-allow-origin': '*' }, body: 'not the real wasm' })
+    })
+  }
+  page.on('response', (r) => /\.wasm$/.test(r.url()) && wasmFrom.add(`${new globalThis.URL(r.url()).host} ${r.status()}`))
+}
 try {
   const page = await browser.newPage()
+  await watchWasm(page)
   await page.setViewport({ width: 390, height: 844, deviceScaleFactor: 2, isMobile: true, hasTouch: true })
   page.on('pageerror', (e) => errors.push(`pageerror: ${e.message}`))
-  page.on('console', (m) => m.type() === 'error' && !/XNNPACK|TensorFlow Lite/.test(m.text()) && errors.push(`console: ${m.text()}`))
-  page.on('requestfailed', (r) => errors.push(`request failed: ${r.url()}`))
+  page.on('console', (m) => m.type() === 'error' && !/XNNPACK|TensorFlow Lite|npmmirror/.test(m.text()) && !(MIRROR === 'block' && /ERR_FAILED/.test(m.text())) && errors.push(`console: ${m.text()}`))
+  page.on('requestfailed', (r) => !(MIRROR === 'block' && r.url().includes('npmmirror')) && errors.push(`request failed: ${r.url()}`))
   page.on('response', (r) => r.status() >= 400 && errors.push(`http ${r.status()}: ${r.url()}`))
   await page.goto(URL, { waitUntil: 'networkidle0' })
   await new Promise((r) => setTimeout(r, 1200))
@@ -59,6 +74,7 @@ try {
   let photoTitle = null
   const photoFile = resolve(process.env.PHOTO || '.test-assets/tassen.jpg')
   const page2 = await browser.newPage()
+  await watchWasm(page2)
   await page2.setViewport({ width: 390, height: 844, deviceScaleFactor: 2, isMobile: true, hasTouch: true })
   page2.on('pageerror', (e) => errors.push(`photo pageerror: ${e.message}`))
   await page2.goto(URL, { waitUntil: 'networkidle0' })
@@ -73,7 +89,7 @@ try {
   photoTitle = await page2.$eval('#reading-title', (e) => e.textContent)
   const photoSubject = await page2.$eval('.reading .full-name', (e) => e.textContent)
 
-  console.log(JSON.stringify({ count, title, saveVisible, photoTitle, photoSubject, errors }, null, 1))
+  console.log(JSON.stringify({ count, title, saveVisible, photoTitle, photoSubject, wasmFrom: [...wasmFrom], errors }, null, 1))
 } finally {
   await browser.close()
 }

@@ -1,0 +1,9 @@
+node_modules
+dist
+.snaps
+.fake
+.test-assets
+fonts-src
+public/_test
+.deploy.env
+.claude
