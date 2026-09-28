@@ -492,11 +492,15 @@ function boot() {
     stage.lockSize()
     videoBlob = null
     $('poster-wrap').hidden = true
+    $('poster-note').hidden = true
     $('save-video').hidden = true
     const rec = startRecording(canvas, audioStream())
     recording = rec ? { rec, token } : null
     if (REDUCED) stage.kick = () => {}
-    ritual = playRitual({ stage, photo, paper, boxes, cast, label, inscription: text, ganzhi })
+    // 结束时底部要放按钮和一行提示（微信等内置浏览器里提示可能两行）：卦名画在它们上面
+    const actionsTop = document.querySelector('#ended .end-actions').getBoundingClientRect().top
+    const bottom = Math.max(0, stage.height - actionsTop) + (IN_APP ? 54 : 34)
+    ritual = playRitual({ stage, photo, paper, boxes, cast, label, inscription: text, ganzhi, bottom })
     debug.ritual = ritual
     // 仪式开始即返回；结束后的事另外接着做
     ritual.done.then(() => finishRitual(token))
@@ -525,6 +529,8 @@ function boot() {
     if (posterUrl && (IN_APP || !playable)) {
       $('poster').src = posterUrl
       $('poster-wrap').hidden = false
+      $('poster-note').textContent = IN_APP ? '长按画面可存图。存视频：点右上角"…"，在浏览器打开' : '长按画面可存图'
+      $('poster-note').hidden = false
     }
   }
 
@@ -558,6 +564,7 @@ function boot() {
     ritual = null
     debug.ritual = null
     $('poster-wrap').hidden = true
+    $('poster-note').hidden = true
     photo.reset()
     paper.reset()
     stage.unlockSize()

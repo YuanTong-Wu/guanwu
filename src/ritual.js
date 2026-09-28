@@ -10,42 +10,12 @@ import { InkDrop, Spatter, GoldFlakes } from './stage/ink.js'
 import { FONTS } from './stage/textures.js'
 import { formulaCaptions } from './captions.js'
 import * as sfx from './audio.js'
+import { layoutFor } from './layout.js'
 
 const INK = 0x1c1813
 
 export { formulaCaptions }
 
-export function layoutFor(W, H) {
-  const landscape = W > H * 1.1
-  if (landscape) {
-    const leafH = H * 0.62
-    const leafW = Math.min(W * 0.4, leafH * 1.15)
-    const leaf = { x: W * 0.07, y: (H - leafH) / 2 - H * 0.02, w: leafW, h: leafH }
-    const lineW = Math.min(W * 0.2, 240)
-    const gap = Math.min(H * 0.07, 34)
-    const hexX = W * 0.68
-    const hexY = H * 0.44
-    return { landscape, leaf, lineW, gap, hexX, hexY, namesY: hexY + gap * 3 + H * 0.11, nameH: Math.min(H * 0.07, 48), captionY: H - Math.max(36, H * 0.06), dateY: Math.max(28, H * 0.05) }
-  }
-  const leafW = Math.min(W * 0.8, 440)
-  const leafH = Math.min(H * 0.34, leafW * 0.92)
-  const leaf = { x: (W - leafW) / 2, y: H * 0.09, w: leafW, h: leafH }
-  const lineW = Math.min(W * 0.42, 220)
-  const gap = Math.min(H * 0.038, 30)
-  const hexY = leaf.y + leafH + H * 0.075 + gap * 2.5
-  return {
-    landscape,
-    leaf,
-    lineW,
-    gap,
-    hexX: W / 2,
-    hexY,
-    namesY: hexY + gap * 3 + Math.min(H * 0.085, 64),
-    nameH: Math.min(W * 0.1, 46),
-    captionY: H - Math.max(34, H * 0.045),
-    dateY: Math.max(26, H * 0.045),
-  }
-}
 
 // 以物体为中心，按册页的宽高比裁一块（屏幕像素，左上为原点）
 function cropAround(boxes, W, H, aspect) {
@@ -102,10 +72,10 @@ function namesRevealAt(chars, spacing, pad, upto) {
 
 // photo、paper：画面层和宣纸层；boxes：被数到的物体（屏幕像素）
 // label：题款用的简称（如"鸟"），inscription：题款正文（如"见鸟二"）；ganzhi：可选的干支纪时
-export function playRitual({ stage, photo, paper, boxes, cast, label, inscription, ganzhi }) {
+export function playRitual({ stage, photo, paper, boxes, cast, label, inscription, ganzhi, bottom = 0 }) {
   const W = stage.width
   const H = stage.height
-  const L = layoutFor(W, H)
+  const L = layoutFor(W, H, bottom)
   const tl = new Timeline()
   const disposables = []
   const add = (u) => {

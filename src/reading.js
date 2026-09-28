@@ -69,5 +69,12 @@ export function renderReading(cast, subject, label) {
       '原文据通行王弼本校订；白话为本项目自撰（CC BY 4.0），只作理解古文之用。起卦是传统文化体验，重在自省，不作任何决定的依据。',
     ),
   )
+  const src = el('p', 'note', '本项目开源：')
+  const link = el('a', null, 'github.com/YuanTong-Wu/guanwu')
+  link.href = 'https://github.com/YuanTong-Wu/guanwu'
+  link.target = '_blank'
+  link.rel = 'noopener'
+  src.append(link)
+  root.append(src)
   return root
 }
