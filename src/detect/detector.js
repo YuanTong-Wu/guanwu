@@ -43,12 +43,20 @@ function convert(result, minScore) {
 }
 
 export async function loadDetector(onProgress) {
+  // wasm 和模型同时下（wasm 先进浏览器缓存），进度按两者总字节算
+  const simd = await import('@mediapipe/tasks-vision').then((m) => m.FilesetResolver.isSimdSupported?.()).catch(() => true)
+  const wasmUrl = `${WASM_BASE}/${simd === false ? 'vision_wasm_nosimd_internal' : 'vision_wasm_internal'}.wasm`
+  const parts = { model: 0, wasm: 0 }
+  const report = () => onProgress?.(Math.min(0.99, parts.model * 0.3 + parts.wasm * 0.7))
   const [{ FilesetResolver, ObjectDetector }, model] = await Promise.all([
     import('@mediapipe/tasks-vision'),
-    fetchWithProgress(MODEL_URL, onProgress),
+    fetchWithProgress(MODEL_URL, (p) => ((parts.model = p), report())),
+    fetchWithProgress(wasmUrl, (p) => ((parts.wasm = p), report())).catch(() => null),
   ])
   const fileset = await FilesetResolver.forVisionTasks(WASM_BASE)
   const det = await ObjectDetector.createFromOptions(fileset, {
+    // iOS 16.4–16.7 的内置浏览器里 OffscreenCanvas 没有 WebGL，给一块普通画布就能识别
+    canvas: document.createElement('canvas'),
     baseOptions: { modelAssetBuffer: model, delegate: 'CPU' },
     runningMode: 'VIDEO',
     scoreThreshold: 0.2,

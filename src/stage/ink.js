@@ -1,6 +1,6 @@
 // 少而准的点缀：一滴墨落下、几点溅墨、盖印后飘落的几片金箔。
 import * as THREE from 'three'
-import { inkDot, goldFlake } from './textures.js'
+import { inkDot, goldFlake, release } from './textures.js'
 import { spriteMaterial } from './sprites.js'
 
 const INK = 0x0d0b09
@@ -31,7 +31,7 @@ export class InkDrop {
   }
 
   dispose() {
-    this.tex.dispose()
+    release(this.tex)
     this.material.dispose()
     this.object.geometry.dispose()
   }
@@ -64,7 +64,7 @@ export class Spatter {
   }
 
   dispose() {
-    this.tex.dispose()
+    release(this.tex)
     this.dots.forEach((m) => {
       m.material.dispose()
       m.geometry.dispose()
@@ -125,14 +125,14 @@ export class GoldFlakes {
       f.m.rotation.z = f.phase + t * 0.6 * (1 - p)
       // 翻到正面时亮一下
       const glint = 0.75 + 0.5 * Math.pow(Math.abs(flip), 6)
-      f.m.material.uniforms.uColor.value.setRGB(0.83 * glint, 0.66 * glint, 0.29 * glint)
+      f.m.material.uniforms.uColor.value.setRGB(0.86 * glint, 0.7 * glint, 0.36 * glint)
       f.m.material.uniforms.uOpacity.value = Math.min(1, t * 4)
     }
   }
 
   dispose() {
     this.flakes.forEach((f) => {
-      f.tex.dispose()
+      release(f.tex)
       f.m.material.dispose()
       f.m.geometry.dispose()
     })

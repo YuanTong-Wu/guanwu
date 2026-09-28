@@ -6,3 +6,4 @@ fonts-src/
 public/_test/
 .snaps/
 .fake/
+.test-assets/

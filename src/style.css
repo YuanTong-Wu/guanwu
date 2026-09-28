@@ -269,14 +269,15 @@ body {
 }
 
 .link-button {
-  background: none;
-  border: 0;
-  color: var(--paper-dim);
+  min-height: 44px;
+  border-radius: 999px;
+  background: rgba(5, 5, 5, 0.5);
+  border: 1px solid rgba(236, 229, 212, 0.18);
+  color: var(--paper);
   font-family: var(--serif);
   font-size: 14px;
-  padding: 8px;
-  text-decoration: underline;
-  text-underline-offset: 4px;
+  padding: 8px 16px;
+  letter-spacing: 0.15em;
   cursor: pointer;
 }
 
@@ -285,25 +286,47 @@ body {
   gap: 14px;
 }
 
+/* 微信等内置浏览器：结束画面换成一张同样大小的图，正好压在画布上，长按即可存 */
 .poster {
+  position: fixed;
+  inset: 0;
   margin: 0;
-  width: min(220px, 60vw);
-  text-align: center;
+  pointer-events: auto;
 }
 
 .poster img {
   width: 100%;
-  border-radius: 8px;
-  border: 1px solid rgba(242, 196, 107, 0.4);
+  height: 100%;
+  object-fit: contain;
   -webkit-touch-callout: default;
-  pointer-events: auto;
+  -webkit-user-select: auto;
+  user-select: auto;
 }
 
 .poster figcaption {
-  margin-top: 8px;
+  position: absolute;
+  left: 16px;
+  right: 16px;
+  bottom: calc(80px + var(--safe-bottom));
   font-size: 12px;
   line-height: 1.7;
+  letter-spacing: 0.08em;
+  text-align: center;
   color: var(--paper-dim);
+}
+
+#ended .end-actions {
+  position: relative;
+  z-index: 2;
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
 }
 
 .end-actions {
@@ -325,6 +348,7 @@ body {
 .panel {
   position: absolute;
   inset: 0;
+  z-index: 10;
   pointer-events: auto;
   background: rgba(5, 5, 5, 0.72);
   display: flex;
@@ -366,9 +390,11 @@ body {
 }
 
 .close-button {
-  position: absolute;
-  top: 10px;
-  right: 12px;
+  position: sticky;
+  top: -18px;
+  float: right;
+  margin: -18px -8px 0 0;
+  z-index: 1;
   width: 40px;
   height: 40px;
   border: 0;
@@ -437,10 +463,12 @@ body {
 
 .toast {
   position: absolute;
-  left: 50%;
-  bottom: calc(120px + var(--safe-bottom));
-  transform: translateX(-50%);
-  max-width: 86%;
+  left: 16px;
+  right: 16px;
+  top: calc(64px + var(--safe-top));
+  margin: 0 auto;
+  width: fit-content;
+  max-width: calc(100% - 32px);
   padding: 10px 18px;
   border-radius: 999px;
   background: rgba(20, 16, 12, 0.9);

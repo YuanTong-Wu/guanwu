@@ -150,7 +150,7 @@ const frag = /* glsl */ `
     a *= 1.0 - sweep * step(uSweep, 0.999);
     // 结果所在的卦位高亮
     float d = abs(mod(ang - uMarkAngle + 3.1416, 6.2832) - 3.1416);
-    float mark = uMark * smoothstep(0.08, 0.0, d) * step(0.34, length(p));
+    float mark = uMark * (1.0 - smoothstep(0.0, 0.08, d)) * step(0.34, length(p));
     if (a < 0.01) discard;
     vec3 col = mix(uColor * uGlow, vec3(0.72, 0.2, 0.12), clamp(mark, 0.0, 1.0));
     gl_FragColor = vec4(col * a, a);
@@ -182,10 +182,8 @@ function goldMaterial(texture, opacity) {
 export class BaguaRing {
   constructor({ diameter }) {
     const tex = new THREE.CanvasTexture(ringCanvas(2048))
-    tex.colorSpace = THREE.SRGBColorSpace
     tex.anisotropy = 8
     const tj = new THREE.CanvasTexture(taijiCanvas(512))
-    tj.colorSpace = THREE.SRGBColorSpace
     this.ringMat = goldMaterial(tex, 0)
     this.taijiMat = goldMaterial(tj, 0)
     this.ring = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), this.ringMat)
@@ -211,6 +209,7 @@ export class BaguaRing {
   set opacity(v) {
     this.ringMat.uniforms.uOpacity.value = v
     this.taijiMat.uniforms.uOpacity.value = v * 0.55
+    this.object.visible = v > 0.001
   }
 
   set glow(v) {
@@ -238,6 +237,7 @@ export class BaguaRing {
   }
 
   update(dt, time = 0) {
+    if (!this.object.visible) return
     // 像天秩的周天盘：在平面与立体之间缓缓往复
     if (this.breathe) this.tilt = Math.sin(time * 0.21) * 0.62
     if (this.targetRotation != null) {

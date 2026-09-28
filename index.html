@@ -2,7 +2,7 @@
 <html lang="zh-CN">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <meta name="theme-color" content="#050505" />
     <!-- 只许连自己的站点：即使以后有人升级了带遥测的库，画面和数据也出不去 -->
     <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'wasm-unsafe-eval' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; connect-src 'self' blob: data:; font-src 'self'; worker-src 'self' blob:" />
@@ -25,14 +25,14 @@
         <p class="footnote">画面只在本机处理，不上传　·　典籍文化体验，仅供娱乐</p>
       </section>
 
-      <section id="loading" class="screen" aria-live="polite">
+      <section id="loading" class="screen">
         <div class="spinner" aria-hidden="true"></div>
-        <p id="loading-text">稍候</p>
+        <p id="loading-text" role="status">稍候</p>
       </section>
 
-      <section id="scan" class="screen" aria-live="polite">
-        <p id="scan-hint" class="scan-hint">对准可数之物，静候片刻</p>
-        <p id="scan-count" class="scan-count"></p>
+      <section id="scan" class="screen">
+        <p id="scan-hint" class="scan-hint" aria-live="polite">对准可数之物，静候片刻</p>
+        <p id="scan-count" class="scan-count" aria-hidden="true"></p>
         <div class="scan-actions">
           <button id="lock" class="line-button" type="button" aria-label="就数这些，起卦"><i aria-hidden="true"></i>就此起卦</button>
         </div>
@@ -42,10 +42,11 @@
         </div>
       </section>
 
-      <section id="ended" class="screen" aria-live="polite">
+      <section id="ended" class="screen">
+        <p id="result-text" class="sr-only" aria-live="polite"></p>
         <figure id="poster-wrap" class="poster" hidden>
           <img id="poster" alt="本次起卦的画面，长按可保存" />
-          <figcaption>长按图片可存。要存视频，请点右上角"…"，选"在浏览器打开"。</figcaption>
+          <figcaption>长按画面可存图。要存视频，请点右上角"…"，选"在浏览器打开"。</figcaption>
         </figure>
         <div class="end-actions">
           <button id="show-reading" class="line-button" type="button"><i aria-hidden="true"></i>看卦辞</button>
@@ -54,7 +55,7 @@
         </div>
       </section>
 
-      <section id="reading" class="panel" aria-labelledby="reading-title" hidden>
+      <section id="reading" class="panel" role="dialog" aria-modal="true" aria-labelledby="reading-title" hidden>
         <div class="panel-inner">
           <button id="close-reading" class="close-button" type="button" aria-label="关闭">×</button>
           <div id="reading-body"></div>

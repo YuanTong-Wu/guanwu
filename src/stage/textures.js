@@ -17,9 +17,24 @@ function rng(seed) {
   }
 }
 
+// 同样的笔画、朱圈、墨点、印章、数字每次仪式都一样，画一次就缓存，不再重复生成和上传
+const CACHE = new Map()
+export function cached(key, make) {
+  if (!CACHE.has(key)) {
+    const t = make()
+    ;(t.texture || t).userData.cached = true
+    CACHE.set(key, t)
+  }
+  return CACHE.get(key)
+}
+
+// 释放贴图：缓存里的留着复用
+export function release(texture) {
+  if (texture && !texture.userData?.cached) texture.dispose()
+}
+
 function toTexture(canvas) {
   const t = new THREE.CanvasTexture(canvas)
-  t.colorSpace = THREE.SRGBColorSpace
   t.minFilter = THREE.LinearMipmapLinearFilter
   t.generateMipmaps = true
   t.anisotropy = 4
@@ -27,7 +42,12 @@ function toTexture(canvas) {
 }
 
 // 一道横向毛笔笔画：起笔顿、行笔带飞白、收笔回锋。白色画在透明底上，颜色交给材质。
-export function brushStroke({ width = 1024, height = 160, seed = 1, dry = 0.5 } = {}) {
+export function brushStroke(opts = {}) {
+  const { width = 1024, height = 160, seed = 1, dry = 0.5 } = opts
+  return cached(`stroke:${seed}:${dry}:${width}x${height}`, () => make_brushStroke({ width, height, seed, dry }))
+}
+
+function make_brushStroke({ width = 1024, height = 160, seed = 1, dry = 0.5 }) {
   const c = document.createElement('canvas')
   c.width = width
   c.height = height
@@ -118,7 +138,13 @@ export function brushSafe(text, font = FONTS.brush) {
   return font === FONTS.brush && [...String(text)].some((ch) => BRUSH_MISSING.includes(ch)) ? FONTS.serif : font
 }
 
-export function glyph(text, { size = 512, font = FONTS.brush, weight = 400, pad = 0.12, spacing = 0 } = {}) {
+export function glyph(text, opts = {}) {
+  // 取景时的数字"一二三……"反复出现，缓存起来
+  if (opts.cache) return cached(`glyph:${text}:${JSON.stringify({ ...opts, cache: 0 })}`, () => makeGlyph(text, opts))
+  return makeGlyph(text, opts)
+}
+
+function makeGlyph(text, { size = 512, font = FONTS.brush, weight = 400, pad = 0.12, spacing = 0 } = {}) {
   font = brushSafe(text, font)
   const lines = String(text).split('\n')
   const c = document.createElement('canvas')
@@ -148,7 +174,12 @@ export function glyph(text, { size = 512, font = FONTS.brush, weight = 400, pad 
 }
 
 // 朱砂方印：边缘残破，阳文白字留空（朱底白字）
-export function seal(text, { size = 512, seed = 3, font = FONTS.brush } = {}) {
+export function seal(text, opts = {}) {
+  const { size = 512, seed = 3, font = FONTS.brush } = opts
+  return cached(`seal:${text}:${size}:${seed}`, () => makeSeal(text, { size, seed, font }))
+}
+
+function makeSeal(text, { size, seed, font }) {
   const c = document.createElement('canvas')
   c.width = c.height = size
   const g = c.getContext('2d')
@@ -212,7 +243,12 @@ export function softDot(size = 64) {
 }
 
 // 毛笔画的取景框角（一个角），白色
-export function brushCorner({ size = 256, seed = 5 } = {}) {
+export function brushCorner(opts = {}) {
+  const { size = 256, seed = 5 } = opts
+  return cached(`corner:${seed}:${size}`, () => make_brushCorner({ size, seed }))
+}
+
+function make_brushCorner({ size = 256, seed = 5 }) {
   const c = document.createElement('canvas')
   c.width = c.height = size
   const g = c.getContext('2d')
@@ -229,7 +265,12 @@ export function brushCorner({ size = 256, seed = 5 } = {}) {
 }
 
 // 朱笔圈：一笔画成的圈，起笔重、收笔轻，首尾不完全相接。白色，交给材质着色。
-export function brushCircle({ size = 256, seed = 9 } = {}) {
+export function brushCircle(opts = {}) {
+  const { size = 256, seed = 9 } = opts
+  return cached(`circle:${seed}:${size}`, () => make_brushCircle({ size, seed }))
+}
+
+function make_brushCircle({ size = 256, seed = 9 }) {
   const c = document.createElement('canvas')
   c.width = c.height = size
   const g = c.getContext('2d')
@@ -254,7 +295,12 @@ export function brushCircle({ size = 256, seed = 9 } = {}) {
 }
 
 // 朱笔叉：两笔
-export function brushCross({ size = 256, seed = 13 } = {}) {
+export function brushCross(opts = {}) {
+  const { size = 256, seed = 13 } = opts
+  return cached(`cross:${seed}:${size}`, () => make_brushCross({ size, seed }))
+}
+
+function make_brushCross({ size = 256, seed = 13 }) {
   const c = document.createElement('canvas')
   c.width = c.height = size
   const g = c.getContext('2d')
@@ -276,7 +322,12 @@ export function brushCross({ size = 256, seed = 13 } = {}) {
 }
 
 // 一滴墨：略扁的圆，边缘有细小的毛刺
-export function inkDot({ size = 128, seed = 17 } = {}) {
+export function inkDot(opts = {}) {
+  const { size = 128, seed = 17 } = opts
+  return cached(`dot:${seed}:${size}`, () => make_inkDot({ size, seed }))
+}
+
+function make_inkDot({ size = 128, seed = 17 }) {
   const c = document.createElement('canvas')
   c.width = c.height = size
   const g = c.getContext('2d')
@@ -297,7 +348,12 @@ export function inkDot({ size = 128, seed = 17 } = {}) {
 }
 
 // 金箔碎片：不规则的小多边形，边缘有折痕
-export function goldFlake({ size = 64, seed = 23 } = {}) {
+export function goldFlake(opts = {}) {
+  const { size = 64, seed = 23 } = opts
+  return cached(`flake:${seed}:${size}`, () => make_goldFlake({ size, seed }))
+}
+
+function make_goldFlake({ size = 64, seed = 23 }) {
   const c = document.createElement('canvas')
   c.width = c.height = size
   const g = c.getContext('2d')

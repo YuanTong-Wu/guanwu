@@ -44,9 +44,13 @@ export function startRecording(source, audioStream) {
   let lastFrame = null
   return {
     // 每次渲染之后立即调用（同一帧内 WebGL 画布内容仍然可读）
-    draw() {
+    draw(now = performance.now()) {
+      // 视频只要 30 帧，屏幕是 60/120 帧时不必每帧都拷
+      if (now - this.last < 30) return
+      this.last = now
       ctx.drawImage(source, 0, 0, canvas.width, canvas.height)
     },
+    last: 0,
     // 最后一帧存成图片，微信里不能下载视频时用来长按保存
     poster() {
       try {

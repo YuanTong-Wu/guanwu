@@ -1,6 +1,6 @@
 // 取景时叠在画面上的细笔框：每个被识别的东西四角一笔，旁边一个中文数字。
 import * as THREE from 'three'
-import { brushCorner } from './textures.js'
+import { brushCorner, release } from './textures.js'
 import { Sprite } from './sprites.js'
 import { spriteMaterial } from './sprites.js'
 import { toChinese } from '../core/numerals.js'
@@ -17,7 +17,7 @@ class Frame {
       this.object.add(m)
       this.corners.push(m)
     }
-    this.number = Sprite.text(toChinese(index + 1), 38, WHITE, { size: 200 })
+    this.number = Sprite.text(toChinese(index + 1), 38, WHITE, { size: 200, cache: true })
     this.object.add(this.number.object)
     this.cur = null
     this.life = 0
@@ -107,6 +107,6 @@ export class ScanOverlay {
 
   dispose() {
     this.clear()
-    this.cornerTex.dispose()
+    release(this.cornerTex)
   }
 }

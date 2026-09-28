@@ -4,7 +4,7 @@
 import * as THREE from 'three'
 import { ricePaper } from './textures.js'
 
-export const MAX_BOXES = 16
+export const MAX_BOXES = 32
 
 const vert = /* glsl */ `
   varying vec2 vUv;
@@ -43,7 +43,8 @@ const bakeFrag = /* glsl */ `
     if (uMirror > 0.5) t.x = 1.0 - t.x;
     return t;
   }
-  float lum(vec2 uv) { return dot(texture2D(uMap, texUv(uv)).rgb, vec3(0.299, 0.587, 0.114)); }
+  // 照片是屏幕颜色（sRGB），按线性亮度判断浓淡，暗部层次更分明
+  float lum(vec2 uv) { vec3 c = texture2D(uMap, texUv(uv)).rgb; return dot(c * c, vec3(0.299, 0.587, 0.114)); }
   // 13 点黄金角螺旋采样的圆盘均值
   float disc(vec2 uv, float r) {
     float s = 0.0;
@@ -75,6 +76,7 @@ const bakeFrag = /* glsl */ `
     ink *= 0.8 + 0.28 * fbm(auv * 16.0 + 7.0);
 
     // 被数到的东西：每个框取一块羽化的圆角区域，边缘随噪声散开
+    float edgeNoise = fbm(auv * 9.0) - 0.5;
     float m = 0.0;
     float dist = 10.0;
     for (int i = 0; i < ${MAX_BOXES}; i++) {
@@ -86,7 +88,7 @@ const bakeFrag = /* glsl */ `
       vec2 ex = abs(k) - h * 0.8;
       float sd = length(max(ex, 0.0)) + min(max(ex.x, ex.y), 0.0);
       float feather = min(h.x, h.y) * 0.45;
-      m = max(m, 1.0 - smoothstep(-feather * 0.2, feather + (fbm(auv * 9.0 + float(i)) - 0.5) * feather, sd));
+      m = max(m, 1.0 - smoothstep(-feather * 0.2, feather + edgeNoise * feather, sd));
       vec2 ex2 = abs(k) - h;
       dist = min(dist, length(max(ex2, 0.0)) + min(max(ex2.x, ex2.y), 0.0));
     }
@@ -132,7 +134,7 @@ const frag = /* glsl */ `
     float fromDrop = length((uv - uOrigin) * vec2(uAspect, 1.0));
     float p = clamp((uInk * 1.9 - fromDrop * 1.25 - baked.a * 0.3) * 2.4, 0.0, 1.0);
     vec3 grey = vec3(dot(photo, vec3(0.299, 0.587, 0.114)));
-    vec3 inkCol = vec3(0.07, 0.064, 0.058);
+    vec3 inkCol = vec3(0.1, 0.092, 0.085);
     vec3 col = mix(mix(photo, grey, min(1.0, p * 2.0)), inkCol, p);
     float alpha = mix(1.0, paintAlpha, p);
     // 册页裁切：只留一块纸
@@ -187,7 +189,6 @@ export class PhotoLayer {
       tex = new THREE.CanvasTexture(source)
       this.sourceSize = { w: source.width || source.naturalWidth, h: source.height || source.naturalHeight }
     }
-    tex.colorSpace = THREE.SRGBColorSpace
     tex.minFilter = THREE.LinearFilter
     tex.generateMipmaps = false
     this.uniforms.uMap.value = tex
@@ -222,8 +223,20 @@ export class PhotoLayer {
       this.inkTarget?.dispose()
       this.inkTarget = new THREE.WebGLRenderTarget(w, h, { depthBuffer: false })
     }
+    const b = this.bakePass(renderer)
+    b.material.uniforms.uPx.value.set(1 / w, 1 / h)
+    const prev = renderer.getRenderTarget()
+    renderer.setRenderTarget(this.inkTarget)
+    renderer.render(b.scene, b.camera)
+    renderer.setRenderTarget(prev)
+    this.uniforms.uInkTex.value = this.inkTarget.texture
+  }
+
+  // 作画用的着色器只建一次；取景时就预先编译，定格那一刻不卡
+  bakePass(renderer) {
+    if (this._bake) return this._bake
     const u = this.uniforms
-    const mat = new THREE.ShaderMaterial({
+    const material = new THREE.ShaderMaterial({
       uniforms: {
         uMap: u.uMap,
         uUvScale: u.uUvScale,
@@ -232,23 +245,27 @@ export class PhotoLayer {
         uAspect: u.uAspect,
         uBoxCount: u.uBoxCount,
         uBoxes: u.uBoxes,
-        uPx: { value: new THREE.Vector2(1 / w, 1 / h) },
+        uPx: { value: new THREE.Vector2(1, 1) },
       },
       vertexShader: /* glsl */ `varying vec2 vUv; void main() { vUv = uv; gl_Position = vec4(position.xy, 0.0, 1.0); }`,
       fragmentShader: bakeFrag,
       depthTest: false,
       depthWrite: false,
     })
-    const quad = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), mat)
     const scene = new THREE.Scene()
-    scene.add(quad)
-    const prev = renderer.getRenderTarget()
-    renderer.setRenderTarget(this.inkTarget)
-    renderer.render(scene, new THREE.Camera())
-    renderer.setRenderTarget(prev)
-    quad.geometry.dispose()
-    mat.dispose()
-    u.uInkTex.value = this.inkTarget.texture
+    scene.add(new THREE.Mesh(new THREE.PlaneGeometry(2, 2), material))
+    const camera = new THREE.Camera()
+    this._bake = { material, scene, camera }
+    return this._bake
+  }
+
+  precompile(renderer) {
+    const b = this.bakePass(renderer)
+    try {
+      renderer.compile(b.scene, b.camera)
+    } catch {
+      // 编译失败留到真正作画时再报
+    }
   }
 
   reset() {
@@ -336,6 +353,7 @@ export class PaperLayer {
 
   set opacity(v) {
     this.uniforms.uOpacity.value = v
+    this.object.visible = v > 0.001
   }
 
   resize(w, h) {

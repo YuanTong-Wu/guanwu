@@ -16,6 +16,10 @@ for (const f of files.filter((f) => /\.(js|html|css)$/.test(f))) {
     if (!/vision_bundle/.test(f)) bad++
   }
 }
+if (existsSync(join(dist, '_test'))) {
+  console.log('dist/_test must not ship (test photos)')
+  bad++
+}
 for (const need of ['fonts/brush.woff2', 'fonts/serif.woff2', 'models/efficientdet_lite0.tflite', 'mediapipe/vision_wasm_internal.wasm']) {
   if (!existsSync(join(dist, need))) {
     console.log(`missing: dist/${need}`)

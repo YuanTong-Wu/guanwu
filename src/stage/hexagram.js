@@ -1,7 +1,7 @@
 // 六道毛笔爻画，黑底白墨。阳爻一笔，阴爻两笔，都是从左往右"写"出来的。
 // 动爻：先由朱笔圈出（阳爻画圈，阴爻打叉，依旧时六爻记法），停一停，再变。
 import * as THREE from 'three'
-import { brushStroke, brushCircle, brushCross } from './textures.js'
+import { brushStroke, brushCircle, brushCross, release } from './textures.js'
 import { Sprite } from './sprites.js'
 
 const vert = /* glsl */ `
@@ -20,7 +20,7 @@ const frag = /* glsl */ `
     float a = texture2D(uMap, vUv).a * uOpacity;
     // 笔锋走过的地方才显出来，前沿参差
     float edge = uReveal * 1.1 - 0.05 + (hash(vec2(floor(vUv.y * 40.0), 3.0)) - 0.5) * 0.05;
-    a *= smoothstep(edge, edge - 0.035, vUv.x);
+    a *= 1.0 - smoothstep(edge - 0.035, edge, vUv.x);
     if (a < 0.01) discard;
     gl_FragColor = vec4(uColor * a, a);
   }
@@ -149,7 +149,7 @@ export class HexagramLines {
 
   dispose() {
     this.materials.forEach((m) => {
-      m.uniforms.uMap.value.dispose()
+      release(m.uniforms.uMap.value)
       m.dispose()
     })
     this.mark?.dispose()

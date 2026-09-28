@@ -1,7 +1,7 @@
 // 平面贴片：书法字、朱笔圈、印章。
 // 字是"写"出来的：沿书写方向显影（横排从左到右，竖排从上到下，圈沿圆周），边缘参差像笔锋。
 import * as THREE from 'three'
-import { glyph, seal } from './textures.js'
+import { glyph, seal, release } from './textures.js'
 
 const vert = /* glsl */ `
   varying vec2 vUv;
@@ -27,7 +27,7 @@ const frag = /* glsl */ `
     }
     float jag = (hash(vec2(floor((uDir == 1 ? vUv.x : vUv.y) * 30.0), 7.0)) - 0.5) * 0.03;
     float edge = uReveal * 1.08 - 0.04 + jag;
-    a *= smoothstep(edge + 0.02, edge - 0.02, pos);
+    a *= 1.0 - smoothstep(edge - 0.02, edge + 0.02, pos);
     if (a < 0.01) discard;
     gl_FragColor = vec4(uColor * a, a);
   }
@@ -104,7 +104,7 @@ export class Sprite {
   }
 
   dispose() {
-    this.material.uniforms.uMap.value.dispose()
+    release(this.material.uniforms.uMap.value)
     this.material.dispose()
     this.object.geometry.dispose()
   }

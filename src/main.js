@@ -3,10 +3,10 @@ import { PhotoLayer, PaperLayer } from './stage/photo.js'
 import { ScanOverlay } from './stage/scan.js'
 import { BaguaRing } from './stage/ring.js'
 import { playRitual } from './ritual.js'
-import { openCamera, grabFrame, loadPhoto } from './camera.js'
+import { openCamera, grabFrame, loadPhoto, stopCamera, cameraAlive } from './camera.js'
 import { loadDetector } from './detect/detector.js'
 import { pickCountable, inscription } from './core/labels.js'
-import { castByCount, castByTime } from './core/meihua.js'
+import { castByCount, castByTime, shichen } from './core/meihua.js'
 import { lunarNow, ganzhiLine, lunarDateLine } from './core/lunar.js'
 import { renderReading } from './reading.js'
 import { unlockAudio, audioStream, woodTick, chime } from './audio.js'
@@ -15,43 +15,13 @@ import { startRecording, shareOrSave } from './recorder.js'
 const $ = (id) => document.getElementById(id)
 const canvas = $('stage')
 const video = $('camera')
+const REDUCED = matchMedia('(prefers-reduced-motion: reduce)').matches
+// 抖音、微信等内置浏览器：相机常常不可用，也不能下载文件
+const IN_APP = /aweme|BytedanceWebview|Douyin|MicroMessenger|QQ\/|Weibo|Toutiao|NewsArticle|Kwai|XiaoHongShu|DingTalk|Alipay/i.test(navigator.userAgent)
+if (IN_APP) $('inapp-tip').hidden = false
 
-const stage = new Stage(canvas)
-const paper = stage.add(new PaperLayer())
-const photo = stage.add(new PhotoLayer())
-const overlay = stage.add(new ScanOverlay(stage))
-
-// 书法字要画进纹理，必须等字体真正加载完
-// 最多等 3 秒：个别环境（后台标签页等）字体加载会一直挂起，不能因此卡住仪式
-const within = (p, ms) => Promise.race([p, new Promise((r) => setTimeout(r, ms))])
-const fontsReady = within(
-  Promise.all([document.fonts?.load?.('64px "WQ Brush"', '万物起卦乾坤'), document.fonts?.load?.('32px "WQ Serif"', '卦之')]).catch(() => {}),
-  3000,
-)
-
-// 首页背景的先天圆图，字体就绪后再画
-const homeRing = { opacity: 0 }
-fontsReady.then(() => {
-  const r = stage.add(new BaguaRing({ diameter: Math.min(stage.width * 1.5, stage.height * 0.85, 900) }))
-  r.speed = 0.03
-  r.breathe = true
-  r.object.position.z = -200
-  Object.defineProperty(homeRing, 'opacity', { set: (v) => (r.opacity = v) })
-  homeRing.opacity = state === 'home' ? 0.3 : 0
-})
-
+// 状态：home → loading → scan（picking 为选照片中）→ ritual → ended
 let state = 'home'
-let detector = null
-let camera = null
-let ritual = null
-let recording = null
-let videoBlob = null
-let lastCast = null
-let stable = { key: '', since: 0 }
-let lastDetections = []
-let noneSince = 0
-let detecting = false
-
 function show(id) {
   document.querySelectorAll('.screen').forEach((s) => s.classList.toggle('active', s.id === id))
 }
@@ -64,332 +34,554 @@ function toast(text, ms = 2600) {
   toast.timer = setTimeout(() => (t.hidden = true), ms)
 }
 
-// —— 主循环 ——
-// 调试钩子：window.__wq.paused 冻结画面（演示模式 ?at=秒 用到）
-const debug = (window.__wq = { paused: false, stage, ritual: null })
-let last = performance.now()
-function loop(now) {
-  const dt = debug.paused ? 0 : Math.min(0.05, (now - last) / 1000)
-  last = now
-  if (state === 'scan') scanTick(now)
-  stage.frame(dt)
-  recording?.draw()
-  requestAnimationFrame(loop)
-}
-requestAnimationFrame(loop)
+// 最多等若干毫秒：个别环境（后台标签页等）会一直挂起，不能因此卡住
+const within = (p, ms) => Promise.race([p, new Promise((r) => setTimeout(r, ms))])
+const fontsReady = within(
+  Promise.all([document.fonts?.load?.('64px "WQ Brush"', '万物起卦乾坤'), document.fonts?.load?.('32px "WQ Serif"', '卦之')]).catch(() => {}),
+  3000,
+)
 
-// —— 开始 ——
-let wakeLock = null
-async function keepAwake() {
-  try {
-    wakeLock = await navigator.wakeLock?.request('screen')
-  } catch {
-    wakeLock = null
-  }
+// —— 卦辞页：对话框语义；返回键、Esc 都能关 ——
+function openReading(c) {
+  $('reading-body').replaceChildren(renderReading(c.cast, c.subject, c.label))
+  $('reading').hidden = false
+  $('close-reading').focus()
+  if (history.state?.reading !== true) history.pushState({ reading: true }, '')
 }
 
-// 相机打不开的设备：首页按钮直接变成"拍照"，在同一次点击里打开系统相机（浏览器要求必须是用户点击）
-let cameraFailed = false
-function switchToPhotoMode(message) {
-  cameraFailed = true
-  $('start').querySelector('span').textContent = '拍 照'
-  $('start').setAttribute('aria-label', '拍一张照片来起卦')
-  show('home')
-  toast(message, 3600)
+function closeReading() {
+  if ($('reading').hidden) return
+  $('reading').hidden = true
+  if (history.state?.reading === true) history.back()
 }
 
-$('start').addEventListener('click', async () => {
-  unlockAudio()
-  if (cameraFailed) {
-    $('photo-input').click()
-    return
-  }
-  keepAwake()
-  chime(1318, 0.6)
-  show('loading')
-  $('loading-text').textContent = '开镜中'
-  const detectorReady = ensureDetector()
-  try {
-    camera = await openCamera(video)
-  } catch (e) {
-    camera = null
-    switchToPhotoMode(e.code === 'NotAllowedError' ? '未得相机之许。再点"拍照"，拍一张亦可起卦' : '此处开不了相机。再点"拍照"，拍一张亦可起卦')
-    return
-  }
-  photo.setSource(video, { mirror: camera.mirror })
-  try {
-    await detectorReady
-  } catch {
-    toast('识物之法未能载入，可"以时起卦"')
-  }
-  enterScan()
+$('close-reading').addEventListener('click', closeReading)
+$('reading').addEventListener('click', (e) => {
+  if (e.target.id === 'reading') closeReading()
+})
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') closeReading()
+})
+window.addEventListener('popstate', () => {
+  $('reading').hidden = true
 })
 
-async function ensureDetector() {
-  if (detector) return detector
-  $('loading-text').textContent = '备识物之法（首次稍慢）'
-  detector = await loadDetector((p) => {
-    if (state !== 'scan') $('loading-text').textContent = `备识物之法　${Math.round(p * 100)}%`
+// —— 画布：不支持 WebGL 的设备仍可以时起卦、看卦辞 ——
+let stage = null
+try {
+  stage = new Stage(canvas)
+} catch {
+  stage = null
+}
+
+if (stage) boot()
+else {
+  document.body.classList.add('no-webgl')
+  $('start').querySelector('span').textContent = '以 时 起 卦'
+  $('start').addEventListener('click', async () => {
+    const now = new Date()
+    const cast = castByTime(await lunarNow(now), now)
+    openReading({ cast, subject: '以时起卦', label: '' })
   })
-  return detector
+  toast('此设备不支持画面效果，可以时起卦，看卦辞', 5000)
 }
 
-// 抖音、微信等内置浏览器里相机常常不可用，首页提示去系统浏览器打开
-const UA = navigator.userAgent
-const IN_APP = /aweme|BytedanceWebview|Douyin|MicroMessenger|QQ\/|Weibo/i.test(UA)
-if (IN_APP) $('inapp-tip').hidden = false
+function boot() {
+  const paper = stage.add(new PaperLayer())
+  const photo = stage.add(new PhotoLayer())
+  const overlay = stage.add(new ScanOverlay(stage))
 
-// 相机开了却一直没有画面（微信 iOS 偶发黑屏）：4 秒后改用拍照
-function watchBlackCamera() {
-  const t0 = video.currentTime
-  setTimeout(() => {
-    if (state !== 'scan') return
-    if (!video.videoWidth || video.currentTime === t0) {
-      toast('相机无画面，请点下方"改以拍照"', 4000)
-      $('use-photo').classList.add('pulse')
+  // 首页背景的先天圆图，字体就绪后再画
+  let ring = null
+  const setRing = (v) => ring && (ring.opacity = v)
+  fontsReady.then(() => {
+    ring = stage.add(new BaguaRing({ diameter: Math.min(stage.width * 1.5, stage.height * 0.85, 900) }))
+    ring.speed = 0.03
+    ring.breathe = !REDUCED
+    ring.object.position.z = -200
+    setRing(state === 'home' ? 0.3 : 0)
+  })
+
+  let detector = null
+  let detectorPromise = null
+  let camera = null
+  let ritual = null
+  let recording = null
+  let castToken = 0
+  let lastCast = null
+  let videoBlob = null
+
+  // —— 主循环：仪式和取景满帧；首页和结束画面降帧，省电 ——
+  const debug = import.meta.env.DEV ? (window.__wq = { paused: false, stage, ritual: null }) : { paused: false }
+  let last = performance.now()
+  let skip = 0
+  function loop(now) {
+    requestAnimationFrame(loop)
+    const idle = state === 'home' || (state === 'ended' && (ritual?.time ?? 0) > (ritual?.duration ?? 0) + 3)
+    if (idle && ++skip % (state === 'home' ? 2 : 4) !== 0) return
+    const dt = debug.paused ? 0 : Math.min(0.05, (now - last) / 1000)
+    last = now
+    stage.frame(dt)
+    recording?.rec.draw(now)
+  }
+  requestAnimationFrame(loop)
+
+  // 显卡上下文丢失（手机切后台太久等）：恢复后重画当前这幅
+  canvas.addEventListener('webglcontextlost', (e) => e.preventDefault())
+  canvas.addEventListener('webglcontextrestored', () => {
+    if (state === 'ritual' || state === 'ended') photo.bake(stage.renderer)
+  })
+
+  // —— 常亮与前后台 ——
+  async function keepAwake() {
+    try {
+      await navigator.wakeLock?.request('screen')
+    } catch {
+      // 不支持就算了
     }
-  }, 4000)
-}
-
-function enterScan() {
-  state = 'scan'
-  watchBlackCamera()
-  stable = { key: '', since: performance.now() }
-  noneSince = performance.now()
-  homeRing.opacity = 0
-  show('scan')
-  $('scan-count').textContent = ''
-  $('scan-hint').textContent = '对准可数之物，静候片刻'
-}
-
-// —— 取景：边看边数 ——
-function scanTick(now) {
-  if (!detector || detecting || !video.videoWidth) return
-  if (now - (scanTick.last || 0) < 110) return
-  scanTick.last = now
-  detecting = true
-  let found = []
-  try {
-    found = detector.detect(video, now)
-  } catch {
-    found = []
   }
-  detecting = false
-  const pick = pickCountable(found)
-  lastDetections = pick ? pick.items : []
-  const boxes = lastDetections
-    .map((d) => toScreenBox(d.box))
-    .sort((a, b) => a.x - b.x)
-  const before = overlay.frames.length
-  overlay.setBoxes(boxes)
-  if (boxes.length > before) woodTick(0.8)
 
-  if (!pick) {
-    $('scan-count').textContent = ''
-    stable = { key: '', since: now }
-    if (now - noneSince > 6000) $('scan-hint').textContent = '未见可数之物。杯、瓶、书、盆栽、人、车皆可'
-    return
-  }
-  noneSince = now
-  $('scan-hint').textContent = '数定即起卦'
-  $('scan-count').textContent = inscription(pick.label, pick.count)
-  const key = `${pick.category}:${pick.count}`
-  if (key !== stable.key) stable = { key, since: now }
-  // 同一个数稳定 1.8 秒，自动定格
-  if (now - stable.since > 1800) lockFromVideo()
-}
+  // —— 取景的计数状态 ——
+  let stable = { key: '', since: 0, last: 0 }
+  let lastDetections = []
+  let noneSince = 0
+  let detectFailures = 0
+  let lastTick = 0
+  let lastCount = 0
+  let detectTimer = 0
 
-function toScreenBox(b) {
-  const a = photo.sourceToScreen(b.x, b.y)
-  const c = photo.sourceToScreen(b.x + b.width, b.y + b.height)
-  return { x: Math.min(a.x, c.x), y: Math.min(a.y, c.y), width: Math.abs(c.x - a.x), height: Math.abs(c.y - a.y) }
-}
-
-$('lock').addEventListener('click', () => {
-  if (state !== 'scan') return
-  if (!lastDetections.length) {
-    toast('尚未见物。对准些再试，或"以时起卦"')
-    return
-  }
-  lockFromVideo()
-})
-
-function lockFromVideo() {
-  if (state !== 'scan') return
-  const still = grabFrame(video)
-  // 识别框是按视频原始分辨率给的，定格图最长边压到了 1280，要同比缩放
-  const k = still.width / video.videoWidth
-  const items = lastDetections.map((d) => ({
-    ...d,
-    box: { x: d.box.x * k, y: d.box.y * k, width: d.box.width * k, height: d.box.height * k },
-  }))
-  begin(still, pickCountable(items), { mirror: camera?.mirror })
-}
-
-// —— 拍照兜底 ——
-$('use-photo').addEventListener('click', () => $('photo-input').click())
-$('photo-input').addEventListener('change', async (e) => {
-  const file = e.target.files?.[0]
-  e.target.value = ''
-  if (!file) return
-  unlockAudio()
-  show('loading')
-  $('loading-text').textContent = '观图中'
-  let still
-  try {
-    still = await loadPhoto(file)
-    await ensureDetector()
-  } catch {
-    if (!still) {
-      show('home')
-      toast('此图读不出，换一张再试')
+  document.addEventListener('visibilitychange', async () => {
+    if (document.hidden) {
+      // 切到后台：取景中就关相机，回来再开；计数重来
+      if (state === 'scan' && camera) {
+        stopCamera(camera.stream)
+        camera = null
+      }
+      stable = { key: '', since: 0, last: 0 }
       return
     }
-  }
-  photo.setSource(still, { mirror: false })
-  let found = []
-  try {
-    found = detector ? await detector.detectImage(still) : []
-  } catch {
-    found = []
-  }
-  const pick = pickCountable(found)
-  homeRing.opacity = 0
-  if (!pick) {
-    toast('照片中未见可数之物，以时起卦')
-    beginTime(still)
-    return
-  }
-  begin(still, pick, { mirror: false })
-})
-
-// —— 以时起卦兜底 ——
-$('use-time').addEventListener('click', () => {
-  unlockAudio()
-  const still = video.videoWidth ? grabFrame(video) : null
-  beginTime(still)
-})
-
-async function beginTime(still) {
-  const now = new Date()
-  const cast = castByTime(await lunarNow(now), now)
-  // 没有物体时，以画面中心一块作为"化墨"的源头
-  if (still) photo.setSource(still, { mirror: camera?.mirror })
-  else photo.setSource(blankCanvas(), { mirror: false })
-  return runRitual([], cast, '', '以时起卦')
-}
-
-function blankCanvas() {
-  const c = document.createElement('canvas')
-  c.width = 640
-  c.height = 960
-  const g = c.getContext('2d')
-  g.fillStyle = '#d8c9a6'
-  g.fillRect(0, 0, c.width, c.height)
-  return c
-}
-
-// —— 起卦 ——
-function begin(still, pick, { mirror }) {
-  const now = new Date()
-  const cast = castByCount(pick.count, now)
-  photo.setSource(still, { mirror })
-  const boxes = pick.items.map((d) => toScreenBox(d.box))
-  return runRitual(boxes, cast, pick.label.short, inscription(pick.label, pick.count))
-}
-
-async function runRitual(boxes, cast, label, text) {
-  state = 'ritual'
-  // 以时起卦时写出实际用的农历日子，与算法对得上；物数占写干支纪时
-  const dateLine = cast.method === 'time' ? Promise.resolve(lunarDateLine(cast.lunar, cast.hour.label)) : within(ganzhiLine(new Date(), cast.hour.label), 1500)
-  const [, ganzhi] = await Promise.all([fontsReady, dateLine])
-  homeRing.opacity = 0
-  overlay.clear()
-  show(null)
-  lastCast = { cast, subject: text, label }
-  photo.reset()
-  paper.reset()
-  photo.setBoxes(boxes)
-  photo.bake(stage.renderer)
-  videoBlob = null
-  recording = startRecording(canvas, audioStream())
-  ritual = playRitual({ stage, photo, paper, boxes, cast, label, inscription: text, ganzhi })
-  debug.ritual = ritual
-  ritual.done.then(async () => {
-    state = 'ended'
-    show('ended')
-    if (recording) {
-      const poster = recording.poster()
-      videoBlob = await recording.stop()
-      recording = null
-      // 微信内置浏览器不能下载文件：给一张可长按保存的图，并提示去浏览器打开
-      const inWeChat = /MicroMessenger/i.test(navigator.userAgent)
-      $('save-video').hidden = !videoBlob || inWeChat
-      if (poster && (inWeChat || !videoBlob)) {
-        $('poster').src = poster
-        $('poster-wrap').hidden = false
+    unlockAudio()
+    if (state === 'scan' || state === 'ritual') keepAwake()
+    if (state === 'scan' && !cameraAlive(camera?.stream)) {
+      try {
+        camera = await openCamera(video)
+        photo.setSource(video, { mirror: camera.mirror })
+      } catch {
+        toast('相机未能重开，可"改以拍照"或"以时起卦"', 4000)
       }
     }
   })
-}
 
-// —— 结束后 ——
-$('show-reading').addEventListener('click', () => {
-  if (!lastCast) return
-  $('reading-body').replaceChildren(renderReading(lastCast.cast, lastCast.subject, lastCast.label))
-  $('reading').hidden = false
-})
-$('close-reading').addEventListener('click', () => ($('reading').hidden = true))
-$('reading').addEventListener('click', (e) => {
-  if (e.target.id === 'reading') $('reading').hidden = true
-})
+  // —— 识物之法：只加载一次 ——
+  function ensureDetector() {
+    if (!detectorPromise) {
+      detectorPromise = loadDetector((p) => {
+        if (state === 'loading') $('loading-text').textContent = p < 1 ? `备识物之法　${Math.round(p * 100)}%` : '备识物之法　稍候'
+      })
+        .then((d) => (detector = d))
+        .catch((e) => {
+          detectorPromise = null
+          throw e
+        })
+    }
+    return detectorPromise
+  }
 
-$('save-video').addEventListener('click', async () => {
-  if (!videoBlob || !lastCast) return
-  const c = lastCast.cast
-  const r = await shareOrSave(videoBlob, `万物起卦-${c.original.name}之${c.changed.name}`)
-  if (r === 'downloaded') toast('已存')
-})
-
-let lastAgain = 0
-$('again').addEventListener('click', () => {
-  // 一事不二占：连着再起，先提一句《蒙》卦的话，但不拦着
-  if (Date.now() - lastAgain < 90_000) toast('初筮告，再三渎，渎则不告。换一事再问', 3200)
-  lastAgain = Date.now()
-  $('poster-wrap').hidden = true
-  ritual?.dispose()
-  ritual = null
-  photo.reset()
-  paper.reset()
-  if (camera && video.videoWidth) {
-    photo.setSource(video, { mirror: camera.mirror })
-    enterScan()
-  } else {
+  // —— 开始 ——
+  let cameraFailed = false
+  function switchToPhotoMode(message) {
+    cameraFailed = true
+    $('start').querySelector('span').textContent = '拍 照'
+    $('start').setAttribute('aria-label', '拍一张照片来起卦')
     state = 'home'
-    photo.object.visible = false
-    homeRing.opacity = 0.3
     show('home')
+    setRing(0.3)
+    toast(message, 4200)
   }
-})
 
+  $('start').addEventListener('click', async () => {
+    unlockAudio()
+    if (state !== 'home') return
+    if (cameraFailed) {
+      state = 'picking'
+      $('photo-input').click()
+      return
+    }
+    keepAwake()
+    chime(1046, 0.5)
+    state = 'loading'
+    show('loading')
+    $('loading-text').textContent = '备识物之法'
+    // 识物之法太久没好（网络慢）：先进入取景，留"以时起卦"和"改以拍照"
+    const detectorReady = within(ensureDetector().catch(() => null), 25000)
+    try {
+      camera = await openCamera(video)
+    } catch (e) {
+      camera = null
+      switchToPhotoMode(e.code === 'NotAllowedError' ? '未得相机之许。再点"拍照"，拍一张亦可起卦' : '此处开不了相机。再点"拍照"，拍一张亦可起卦')
+      return
+    }
+    photo.setSource(video, { mirror: camera.mirror })
+    photo.precompile(stage.renderer)
+    await detectorReady
+    if (!detector) toast('识物之法未能载入。可"改以拍照"或"以时起卦"', 5000)
+    enterScan()
+  })
 
-// 调试：?autostart 自动点"起卦"；?snaplive=0.5 每隔 0.5 秒把画面存到开发服务器（配合无头浏览器和假摄像头做端到端检查）
-const QS = new URLSearchParams(location.search)
-if (QS.has('autostart')) fontsReady.then(() => setTimeout(() => $('start').click(), 300))
-if (QS.has('snaplive')) {
-  const every = Number(QS.get('snaplive')) || 0.5
-  let n = 0
-  const snap = () => {
-    stage.frame(0)
-    const url = canvas.toDataURL('image/jpeg', 0.8)
-    const ui = [...document.querySelectorAll('.screen.active')].map((e) => e.id).join('+') || 'none'
-    fetch(`/__snap?name=live-${String(n++).padStart(3, '0')}-${state}-${ui}`, { method: 'POST', body: url })
+  function enterScan() {
+    state = 'scan'
+    stable = { key: '', since: 0, last: 0 }
+    noneSince = performance.now()
+    lastCount = 0
+    setRing(0)
+    show('scan')
+    $('scan-count').textContent = ''
+    setHint('对准可数之物，静候片刻')
+    $('use-photo').classList.remove('pulse')
+    watchBlackCamera()
+    scheduleDetect(300)
   }
-  setInterval(snap, every * 1000)
-}
 
-// 调试：?demo 用内置示意图直接跑一遍仪式（没有相机也能看效果）
-if (new URLSearchParams(location.search).has('demo')) {
-  const detectPhoto = async (image) => (await ensureDetector()).detectImage(image)
-  import('./demo.js').then((m) => m.runDemo({ begin, stage, detectPhoto, beginTime }))
+  function setHint(text) {
+    if ($('scan-hint').textContent !== text) $('scan-hint').textContent = text
+  }
+
+  // 相机开了却一直没有画面（微信 iOS 偶发黑屏）
+  function watchBlackCamera() {
+    const t0 = video.currentTime
+    setTimeout(() => {
+      if (state !== 'scan') return
+      if (!video.videoWidth || video.currentTime === t0) {
+        toast('相机无画面，请点下方"改以拍照"', 4000)
+        $('use-photo').classList.add('pulse')
+      }
+    }, 4000)
+  }
+
+  // 识别不放在渲染循环里：按上一次用时自适应间隔，画面不卡
+  function scheduleDetect(ms) {
+    clearTimeout(detectTimer)
+    detectTimer = setTimeout(detectTick, ms)
+  }
+
+  function toScreenBox(b) {
+    const a = photo.sourceToScreen(b.x, b.y)
+    const c = photo.sourceToScreen(b.x + b.width, b.y + b.height)
+    return { x: Math.min(a.x, c.x), y: Math.min(a.y, c.y), width: Math.abs(c.x - a.x), height: Math.abs(c.y - a.y) }
+  }
+
+  // 只数屏幕上看得见的：画面按 cover 裁切，边上被裁掉的不算
+  function visibleOnly(dets) {
+    const W = stage.width
+    const H = stage.height
+    return dets.filter((d) => {
+      const b = toScreenBox(d.box)
+      const cx = b.x + b.width / 2
+      const cy = b.y + b.height / 2
+      return cx > 0 && cx < W && cy > 0 && cy < H
+    })
+  }
+
+  function detectTick() {
+    if (state !== 'scan') return
+    if (!detector || !video.videoWidth || document.hidden) return scheduleDetect(400)
+    const t0 = performance.now()
+    let found = []
+    try {
+      found = visibleOnly(detector.detect(video, t0))
+      detectFailures = 0
+    } catch {
+      detectFailures++
+    }
+    const took = performance.now() - t0
+    onDetections(found, performance.now())
+    if (detectFailures > 5) {
+      setHint('此处识物不成。可"改以拍照"或"以时起卦"')
+      return
+    }
+    scheduleDetect(Math.max(180, took * 2))
+  }
+
+  function onDetections(found, now) {
+    const pick = pickCountable(found)
+    lastDetections = pick ? pick.items : []
+    const boxes = lastDetections.map((d) => toScreenBox(d.box)).sort((a, b) => a.x - b.x)
+    overlay.setBoxes(boxes)
+    // 木鱼：数目变多才敲，且不连敲
+    if (boxes.length > lastCount && now - lastTick > 160) {
+      woodTick(0.7)
+      lastTick = now
+    }
+    lastCount = boxes.length
+    if (!pick) {
+      $('scan-count').textContent = ''
+      stable = { key: '', since: 0, last: now }
+      if (now - noneSince > 6000) setHint('未见可数之物。杯、瓶、书、盆栽、人、车皆可')
+      return
+    }
+    noneSince = now
+    $('scan-count').textContent = inscription(pick.label, pick.count)
+    const key = `${pick.label.short}:${pick.count}:${shichen(new Date()).num}`
+    // 要连续看见同一个数；中断超过 0.7 秒就重新计时
+    if (key !== stable.key || now - stable.last > 700) stable = { key, since: now, last: now }
+    stable.last = now
+    // 刚占过的同物同数同时辰，不自动再起：卦必同前
+    if (lastCast && key === lastCast.key) {
+      setHint('同物同数同时，卦同前。换一物再占')
+      return
+    }
+    setHint('数定即起卦')
+    if (now - stable.since > 1800) lockFromVideo()
+  }
+
+  $('lock').addEventListener('click', () => {
+    unlockAudio()
+    if (state !== 'scan') return
+    if (!lastDetections.length) {
+      toast('尚未见物。对准些再试，或"以时起卦"')
+      return
+    }
+    lockFromVideo()
+  })
+
+  function lockFromVideo() {
+    if (state !== 'scan' || !video.videoWidth) return
+    const still = grabFrame(video)
+    // 识别框是按视频原始分辨率给的，定格图最长边压到了 1280，要同比缩放
+    const k = still.width / video.videoWidth
+    const items = lastDetections.map((d) => ({ ...d, box: { x: d.box.x * k, y: d.box.y * k, width: d.box.width * k, height: d.box.height * k } }))
+    begin(still, pickCountable(items), { mirror: camera?.mirror })
+  }
+
+  // —— 拍照兜底 ——
+  function backFromPicking() {
+    if (cameraAlive(camera?.stream)) enterScan()
+    else {
+      state = 'home'
+      show('home')
+      setRing(0.3)
+    }
+  }
+  $('use-photo').addEventListener('click', () => {
+    unlockAudio()
+    if (state !== 'scan') return
+    state = 'picking'
+    clearTimeout(detectTimer)
+    $('photo-input').click()
+  })
+  // 选照片时点了取消：回到原来的地方
+  $('photo-input').addEventListener('cancel', () => {
+    if (state === 'picking') backFromPicking()
+  })
+  $('photo-input').addEventListener('change', async (e) => {
+    const file = e.target.files?.[0]
+    e.target.value = ''
+    if (state !== 'picking') return
+    if (!file) return backFromPicking()
+    unlockAudio()
+    state = 'loading'
+    show('loading')
+    $('loading-text').textContent = '观图中'
+    let still = null
+    try {
+      still = await loadPhoto(file)
+    } catch {
+      still = null
+    }
+    if (!still) {
+      toast('此图读不出，换一张再试')
+      return backFromPicking()
+    }
+    await within(ensureDetector().catch(() => null), 25000)
+    photo.setSource(still, { mirror: false })
+    let found = []
+    try {
+      found = detector ? visibleOnly(await detector.detectImage(still)) : []
+    } catch {
+      found = []
+    }
+    const pick = pickCountable(found)
+    if (!pick) {
+      toast('图中未见可数之物，以时起卦')
+      return beginTime(still, false)
+    }
+    return begin(still, pick, { mirror: false })
+  })
+
+  // —— 以时起卦 ——
+  $('use-time').addEventListener('click', () => {
+    unlockAudio()
+    if (state !== 'scan') return
+    beginTime(video.videoWidth ? grabFrame(video) : null, !!camera?.mirror)
+  })
+
+  async function beginTime(still, mirror) {
+    const token = claim()
+    const now = new Date()
+    const cast = castByTime(await lunarNow(now), now)
+    if (token !== castToken) return
+    photo.setSource(still || blankCanvas(), { mirror: still ? mirror : false })
+    return runRitual(token, [], cast, '', '以时起卦', `time:${cast.original.num}:${cast.hour.num}`)
+  }
+
+  function blankCanvas() {
+    const c = document.createElement('canvas')
+    c.width = 640
+    c.height = 960
+    const g = c.getContext('2d')
+    g.fillStyle = '#d8c9a6'
+    g.fillRect(0, 0, c.width, c.height)
+    return c
+  }
+
+  // 占住这一次起卦：从这一刻起取景界面不可再点，别的入口一律让路
+  function claim() {
+    state = 'ritual'
+    show(null)
+    clearTimeout(detectTimer)
+    return ++castToken
+  }
+
+  // —— 起卦 ——
+  function begin(still, pick, { mirror }) {
+    const token = claim()
+    const cast = castByCount(pick.count, new Date())
+    photo.setSource(still, { mirror })
+    const boxes = pick.items.map((d) => toScreenBox(d.box))
+    return runRitual(token, boxes, cast, pick.label.short, inscription(pick.label, pick.count), `${pick.label.short}:${pick.count}:${cast.hour.num}`)
+  }
+
+  async function runRitual(token, boxes, cast, label, text, key) {
+    // 定格后不再需要相机：关掉，省电也让人放心
+    if (camera) {
+      stopCamera(camera.stream)
+      camera = null
+    }
+    ritual?.dispose()
+    ritual = null
+    if (recording) {
+      recording.rec.stop()
+      recording = null
+    }
+    const dateLine = cast.method === 'time' ? Promise.resolve(lunarDateLine(cast.lunar, cast.hour.label)) : within(ganzhiLine(new Date(), cast.hour.label), 1500)
+    const [, ganzhi] = await Promise.all([fontsReady, dateLine])
+    if (token !== castToken) return
+    setRing(0)
+    overlay.clear()
+    lastCast = { cast, subject: text, label, key, at: Date.now() }
+    $('result-text').textContent = `${text}，${cast.hour.label}，得${cast.original.name}之${cast.changed.name}`
+    photo.reset()
+    paper.reset()
+    photo.setBoxes(boxes)
+    photo.bake(stage.renderer)
+    stage.lockSize()
+    videoBlob = null
+    $('poster-wrap').hidden = true
+    $('save-video').hidden = true
+    const rec = startRecording(canvas, audioStream())
+    recording = rec ? { rec, token } : null
+    if (REDUCED) stage.kick = () => {}
+    ritual = playRitual({ stage, photo, paper, boxes, cast, label, inscription: text, ganzhi })
+    debug.ritual = ritual
+    await ritual.done
+    if (token !== castToken) return
+    state = 'ended'
+    show('ended')
+    // 结束画面存一张图：微信等内置浏览器里长按保存用；录不了视频时也用它
+    let posterUrl = null
+    try {
+      stage.frame(0)
+      posterUrl = canvas.toDataURL('image/jpeg', 0.9)
+    } catch {
+      posterUrl = null
+    }
+    if (recording && recording.token === token) {
+      const r = recording.rec
+      recording = null
+      videoBlob = await r.stop()
+    }
+    if (token !== castToken) return
+    const playable = videoBlob && /mp4/.test(videoBlob.type)
+    $('save-video').hidden = !videoBlob || IN_APP
+    if (posterUrl && (IN_APP || !playable)) {
+      $('poster').src = posterUrl
+      $('poster-wrap').hidden = false
+    }
+  }
+
+  // —— 结束后 ——
+  $('show-reading').addEventListener('click', () => {
+    if (lastCast) openReading(lastCast)
+  })
+
+  let sharing = false
+  $('save-video').addEventListener('click', async () => {
+    unlockAudio()
+    if (!videoBlob || !lastCast || sharing) return
+    sharing = true
+    try {
+      const c = lastCast.cast
+      const r = await shareOrSave(videoBlob, `万物起卦-${c.original.name}之${c.changed.name}`)
+      if (r === 'shared') toast('已存')
+      else if (r === 'downloaded') toast('若未见下载，可截屏留存')
+    } finally {
+      sharing = false
+    }
+  })
+
+  $('again').addEventListener('click', async () => {
+    unlockAudio()
+    if (state !== 'ended') return
+    // 一事不二占：刚占过又占，提一句《蒙》卦的话，但不拦着
+    if (lastCast && Date.now() - lastCast.at < 90_000) toast('初筮告，再三渎，渎则不告。换一事再问', 3600)
+    castToken++
+    ritual?.dispose()
+    ritual = null
+    debug.ritual = null
+    $('poster-wrap').hidden = true
+    photo.reset()
+    paper.reset()
+    stage.unlockSize()
+    closeReading()
+    state = 'loading'
+    show('loading')
+    $('loading-text').textContent = '开镜'
+    try {
+      camera = await openCamera(video)
+      photo.setSource(video, { mirror: camera.mirror })
+      keepAwake()
+      enterScan()
+    } catch {
+      camera = null
+      photo.object.visible = false
+      switchToPhotoMode('此处开不了相机。再点"拍照"，拍一张亦可起卦')
+    }
+  })
+
+  // —— 开发用（正式构建里没有） ——
+  if (import.meta.env.DEV) {
+    const QS = new URLSearchParams(location.search)
+    // ?autostart 自动点"起卦"；?snaplive=0.5 每隔 0.5 秒把画面存到开发服务器（配合无头浏览器和假摄像头做端到端检查）
+    if (QS.has('autostart')) fontsReady.then(() => setTimeout(() => $('start').click(), 300))
+    if (QS.has('snaplive')) {
+      const every = Number(QS.get('snaplive')) || 0.5
+      let n = 0
+      setInterval(() => {
+        stage.frame(0)
+        const url = canvas.toDataURL('image/jpeg', 0.8)
+        const ui = [...document.querySelectorAll('.screen.active')].map((e) => e.id).join('+') || 'none'
+        fetch(`/__snap?name=live-${String(n++).padStart(3, '0')}-${state}-${ui}`, { method: 'POST', body: url })
+      }, every * 1000)
+    }
+    // ?demo 用内置示意图或 &img= 照片直接跑一遍仪式（没有相机也能看效果）
+    if (QS.has('demo')) {
+      const detectPhoto = async (image) => {
+        await ensureDetector()
+        photo.setSource(image, { mirror: false })
+        return visibleOnly(await detector.detectImage(image))
+      }
+      const demoTime = (still) => beginTime(still, false)
+      import('./demo.js').then((m) => m.runDemo({ begin, stage, detectPhoto, beginTime: demoTime }))
+    }
+  }
 }

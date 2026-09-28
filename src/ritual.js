@@ -162,7 +162,7 @@ export function playRitual({ stage, photo, paper, boxes, cast, label, inscriptio
   // —— 印章：题款下方，册页右侧 ——
   const sealSize = Math.min(L.leaf.w * 0.15, 56)
   const seal = add(Sprite.seal('万物起卦', sealSize, CINNABAR, { order: 32 }))
-  const sealPos = S(insRight - sealSize * 0.1 - sealSize / 2 + insH * 0.5, insTop + ins1.baseHeight + sealSize * 0.85)
+  const sealPos = S(insRight - sealSize / 2 + insH * 0.4, insTop + ins1.baseHeight + sealSize * 0.9)
   seal.object.position.set(sealPos.x, sealPos.y, 0)
   seal.opacity = 0
   const flakes = add(new GoldFlakes({ rect: { x: leafC.x - L.leaf.w / 2, y: leafC.y + L.leaf.h / 2, w: L.leaf.w, h: L.leaf.h }, count: 10, seed: cast.original.num }))
@@ -193,11 +193,12 @@ export function playRitual({ stage, photo, paper, boxes, cast, label, inscriptio
     s.opacity = 0
     return s
   }
-  const capH = Math.min(W * 0.037, 16)
+  // 字形约占贴图高度的 80%，这里给到约 15 像素的实际字高，视频里也看得清
+  const capH = Math.min(W * 0.05, 20)
   const capLower = small(caps.lower, L.captionY, capH)
   const capUpper = small(caps.upper, L.captionY, capH)
   const capMoving = small(caps.moving, L.captionY, capH)
-  const dateLine = ganzhi ? small(ganzhi, L.dateY, capH * 0.95) : null
+  const dateLine = ganzhi ? small(ganzhi, L.dateY, capH * 0.9) : null
   const fadeIn = (s, at, d = 0.4, to = 0.8) => tl.tween(at, d, (p) => (s.opacity = p * to), ease.outQuad)
   const fadeOut = (s, at, d = 0.35, from = 0.8) => tl.tween(at, d, (p) => (s.opacity = from * (1 - p)), ease.inQuad)
 
@@ -300,7 +301,7 @@ export function playRitual({ stage, photo, paper, boxes, cast, label, inscriptio
       // 忽略
     }
   })
-  if (dateLine) fadeIn(dateLine, tSeal + 0.8, 0.8, 0.6)
+  if (dateLine) fadeIn(dateLine, tSeal + 0.8, 0.8, 0.72)
 
   const total = tSeal + 2.6
   let finished

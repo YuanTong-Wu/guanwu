@@ -2,6 +2,11 @@
 // 相机距离算好，使 z=0 平面上 1 个单位 = 1 个 CSS 像素，原点在屏幕中心。
 // 画面风格克制：不加辉光、色差、颗粒，只留纸边一点暗角和盖印时的一下震动。
 import * as THREE from 'three'
+
+// 全程按"所见即所值"处理颜色：贴图不解码、输出不编码，颜色常量就是屏幕上的颜色。
+// 照片定格前后亮度一致，朱砂、纸白也不会发闷。
+THREE.ColorManagement.enabled = false
+
 import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer.js'
 import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js'
 import { ShaderPass } from 'three/examples/jsm/postprocessing/ShaderPass.js'
@@ -24,7 +29,7 @@ const FinalShader = {
       vec3 col = texture2D(tDiffuse, vUv).rgb;
       vec2 c = vUv - 0.5;
       // 旧纸四边微微发暗
-      float vig = smoothstep(0.95, 0.35, length(c * vec2(uAspect * 0.9, 1.0)));
+      float vig = 1.0 - smoothstep(0.35, 0.95, length(c * vec2(uAspect * 0.9, 1.0)));
       col *= mix(1.0, vig, uVignette);
       gl_FragColor = vec4(col, 1.0);
     }
@@ -34,19 +39,20 @@ const FinalShader = {
 export class Stage {
   constructor(canvas) {
     this.canvas = canvas
-    this.renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: false, powerPreference: 'high-performance' })
+    this.renderer = new THREE.WebGLRenderer({ canvas, antialias: false, alpha: false, depth: false, powerPreference: 'high-performance' })
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2))
     this.renderer.setClearColor(0x050505, 1)
-    this.renderer.outputColorSpace = THREE.SRGBColorSpace
+    this.renderer.outputColorSpace = THREE.LinearSRGBColorSpace
     this.scene = new THREE.Scene()
     this.camera = new THREE.PerspectiveCamera(35, 1, 1, 20000)
     this.shake = 0
     this.time = 0
     this.updaters = new Set()
 
-    this.composer = new EffectComposer(this.renderer)
+    // 8 位、无深度缓冲的中间画布就够了：全是平面叠加，不需要半浮点和深度
+    const rt = new THREE.WebGLRenderTarget(1, 1, { type: THREE.UnsignedByteType, depthBuffer: false })
+    this.composer = new EffectComposer(this.renderer, rt)
     this.composer.addPass(new RenderPass(this.scene, this.camera))
-    // 最后一道渲到屏幕时 three 会自己转 sRGB，不能再加 OutputPass，否则转两次，黑底会发灰
     this.final = new ShaderPass(FinalShader)
     this.composer.addPass(this.final)
 
@@ -56,14 +62,37 @@ export class Stage {
   }
 
   get width() {
-    return this.canvas.clientWidth || window.innerWidth
+    return this.locked ? this.locked.w : this.canvas.clientWidth || window.innerWidth
   }
 
   get height() {
-    return this.canvas.clientHeight || window.innerHeight
+    return this.locked ? this.locked.h : this.canvas.clientHeight || window.innerHeight
+  }
+
+  // 仪式进行和结束画面时锁住画幅：转屏只把画布等比缩放居中，构图和录像都不变形
+  lockSize() {
+    this.locked = { w: this.width, h: this.height }
+  }
+
+  unlockSize() {
+    this.locked = null
+    this.canvas.style.cssText = ''
+    this.resize()
   }
 
   resize() {
+    if (this.locked) {
+      const vw = window.innerWidth
+      const vh = window.innerHeight
+      const k = Math.min(vw / this.locked.w, vh / this.locked.h)
+      Object.assign(this.canvas.style, {
+        width: `${this.locked.w * k}px`,
+        height: `${this.locked.h * k}px`,
+        left: `${(vw - this.locked.w * k) / 2}px`,
+        top: `${(vh - this.locked.h * k) / 2}px`,
+      })
+      return
+    }
     const w = this.width
     const h = this.height
     this.renderer.setSize(w, h, false)
