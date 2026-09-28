@@ -63,6 +63,24 @@ node scripts/build-zhouyi.mjs     # 重新生成周易数据（含校勘）
 node scripts/font-chars.mjs && python3 scripts/build-fonts.py   # 重新裁字体
 ```
 
+## 在自己手机上玩
+
+手机和电脑连同一个 Wi-Fi：
+
+```bash
+npm run phone
+```
+
+它会构建并用自签名证书开一个 HTTPS 地址（终端里 Network 那一行，如 `https://192.168.1.5:4443`）。手机浏览器只在 HTTPS 下才给网页用相机，所以打开时会有一次证书警告：iPhone Safari 点"显示详细信息 → 访问此网站"，安卓 Chrome 点"高级 → 继续前往"。
+
+想用 4G 或在微信里试，可以再开一个临时公网链接（装了 cloudflared 的话）：
+
+```bash
+cloudflared tunnel --url https://localhost:4443 --no-tls-verify
+```
+
+拿到链接的人都能打开；关掉命令链接就失效。整个应用在访客手机上运行，不耗任何额度，只用电脑的上传流量（每位新访客首次约 16 MB）。
+
 ## 部署
 
 `npm run build` 生成 `dist/`，是纯静态文件，放到任何静态托管都行。所有资源都是同源的，不依赖谷歌、jsDelivr 等在国内不稳定的域名。
