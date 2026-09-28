@@ -4,7 +4,7 @@ import { ScanOverlay } from './stage/scan.js'
 import { BaguaRing } from './stage/ring.js'
 import { playRitual } from './ritual.js'
 import { openCamera, grabFrame, loadPhoto, stopCamera, cameraAlive } from './camera.js'
-import { loadDetector } from './detect/detector.js'
+import { loadDetector, prefetchDetector } from './detect/detector.js'
 import { pickCountable, inscription } from './core/labels.js'
 import { castByCount, castByTime, shichen } from './core/meihua.js'
 import { lunarNow, ganzhiLine, lunarDateLine } from './core/lunar.js'
@@ -173,6 +173,12 @@ function boot() {
   })
 
   // —— 识物之法：只加载一次 ——
+  // 首页上先在后台把模型和 wasm 下好（不占 CPU），点"起卦"时少等一会儿；省流量模式下不预先下
+  if (!navigator.connection?.saveData) {
+    const idle = window.requestIdleCallback || ((f) => setTimeout(f, 1500))
+    fontsReady.then(() => idle(() => state === 'home' && prefetchDetector(), { timeout: 3000 }))
+  }
+
   function ensureDetector() {
     if (!detectorPromise) {
       detectorPromise = loadDetector((p) => {
