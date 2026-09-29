@@ -2,6 +2,10 @@
 
 心有一事，见物起卦。
 
+**在线试玩**（用手机浏览器打开）：
+- 国内：https://modelscope.cn/studios/yuantongwu/guanwu （魔搭创空间）
+- 海外：https://guanwu-orcin.vercel.app
+
 名字取自邵雍《观物篇》。邵雍也是《梅花易数》托名的作者。
 
 拿手机对着眼前的东西一扫。手机在本地认出画面里的东西、数清楚，按《梅花易数》的"物数占"起一卦。
@@ -89,7 +93,9 @@ cloudflared tunnel --url https://localhost:4443 --no-tls-verify
 
 `node scripts/compress.mjs` 会给大文件预先压好 `.br`/`.gz`，首次打开约 6 MB（不压缩约 18 MB）。托管要能按 `Accept-Encoding` 发这些压缩版，`.wasm` 要用 `application/wasm`。
 
-免费托管可以用 [Vercel](https://vercel.com)（仓库里有 `vercel.json`）：在仓库根目录运行 `npx vercel deploy --prod`，再绑定自己的域名。国内访问时，域名的 A 记录用 `76.76.21.21`，不要用面板给的 `216.198.79.x`（2026 年 9 月起中国移动连不上）。
+国内免费托管可以用魔搭创空间（ModelScope Studio，静态类型）：`scripts/deploy-modelscope.sh` 构建后推到空间仓库并重新部署（令牌放在一个只含令牌的文本文件里，默认 `~/Desktop/modelscope-token.txt`）。魔搭的静态空间不解析 Git LFS，模型、wasm、字体要作为普通文件提交，脚本已处理。
+
+海外免费托管可以用 [Vercel](https://vercel.com)（仓库里有 `vercel.json`）：在仓库根目录运行 `npx vercel deploy --prod`，再绑定自己的域名。国内访问时，域名的 A 记录用 `76.76.21.21`，不要用面板给的 `216.198.79.x`（2026 年 9 月起中国移动连不上）。
 
 自己有一台服务器（比如不用备案的香港服务器）时，可以用仓库里的脚本：
 
