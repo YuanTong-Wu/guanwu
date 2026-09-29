@@ -69,7 +69,7 @@ export function runDemo({ begin, detectPhoto, beginTime }) {
         const until = Math.min(t, dbg.ritual?.duration ?? t)
         while (dbg.ritual && dbg.ritual.time < until) dbg.stage.frame(1 / 60)
         dbg.stage.frame(0)
-        const url = dbg.stage.canvas.toDataURL('image/jpeg', 0.82)
+        const url = dbg.stage.canvas.toDataURL('image/jpeg', Number(q.get('snapq')) || 0.82)
         const name = fps ? `${tag}-${String(Math.round(t * fps)).padStart(4, '0')}` : `${tag}-${String(t).padStart(5, '0')}`
         await fetch(`/__snap?name=${name}`, { method: 'POST', body: url })
       }

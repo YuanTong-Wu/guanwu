@@ -40,7 +40,9 @@ export class Stage {
   constructor(canvas) {
     this.canvas = canvas
     this.renderer = new THREE.WebGLRenderer({ canvas, antialias: false, alpha: false, depth: false, powerPreference: 'high-performance' })
-    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2))
+    // 手机上最多按 2 倍像素画（再高费电、看不出差别）；开发时 ?maxdpr=3 可放开，用来截高清素材
+    const cap = (import.meta.env.DEV && Number(new URLSearchParams(location.search).get('maxdpr'))) || 2
+    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, cap))
     this.renderer.setClearColor(0x050505, 1)
     this.renderer.outputColorSpace = THREE.LinearSRGBColorSpace
     this.scene = new THREE.Scene()
